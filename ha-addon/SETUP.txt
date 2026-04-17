@@ -1,51 +1,93 @@
-== SETUP - Familjeapp på Animus Home ==
+== SETUP — FamiljePlan på Animus Heart / Home Assistant ==
 
---- STEG 1: Flasha SD-kortet ---
-1. Ladda ner Raspberry Pi Imager: https://www.raspberrypi.com/software/
-2. Sätt in SD-kortet i datorn
-3. Öppna Imager → "Choose OS" → "Other specific-purpose OS"
-   → "Home Assistant and Home Automation" → "Home Assistant OS"
-   → Välj "Raspberry Pi Zero 2 W"
-4. Välj ditt SD-kort och klicka "Write"
+Appen körs som ett lokalt HA-tillägg (add-on). Alla enheter på samma
+WiFi-nätverk delar automatiskt samma data via servern på Animus Heart.
+Ingen molntjänst eller extern inloggning behövs.
 
---- STEG 2: Första uppstart ---
-1. Sätt in kortet i Animus Home och koppla in strömmen
-2. Vänta ~5 minuter
-3. Öppna http://homeassistant.local:8123 i webbläsaren
-4. Följ setup-guiden
+─────────────────────────────────────────────────────────────
+STEG 1 — Bygg React-appen på din dator
+─────────────────────────────────────────────────────────────
+Öppna en terminal i familjeapp-mappen och kör:
 
---- STEG 3: Installera SSH Add-on ---
-1. Gå till Settings → Add-ons → Add-on Store
-2. Sök "Terminal & SSH" → Installera → Starta
-3. Aktivera "Show in sidebar"
+  npm run build
 
---- STEG 4: Kopiera familjeappen till HA ---
-Öppna terminalen i HA (sidopanelen) och kör:
-  mkdir -p /addons/familjeapp/app
+Det skapar mappen  familjeapp/build/  med den färdiga appen.
 
-Kopiera sedan hela innehållet i ha-addon/ till /addons/familjeapp/
-på HA-systemet. Enklast via Samba-appen:
-  1. Installera "Samba share" add-on
-  2. Dela ut addons-mappen
-  3. Kopiera från din dator: \\homeassistant\addons\familjeapp\
+─────────────────────────────────────────────────────────────
+STEG 2 — Kopiera filer till Animus Heart
+─────────────────────────────────────────────────────────────
+Installera "Samba share"-tillägget i HA (om inte redan gjort):
+  Settings → Add-ons → Add-on Store → Samba share → Install → Start
 
-Strukturen ska se ut så:
+Kopiera sedan HELA innehållet i ha-addon/ till:
+  \\homeassistant\addons\familjeapp\
+
+Kopiera även den byggda appen (build/-mappen) till:
+  \\homeassistant\addons\familjeapp\app\build\
+
+Strukturen på Animus Heart ska se ut så här:
   /addons/familjeapp/
     config.yaml
     Dockerfile
-    nginx.conf
-    app/           ← hela familjeapp-projektet (ej node_modules)
+    server.js        ← Node.js-server (ny)
+    app/
+      build/         ← React-bygget (kopierat från din dator)
+      package.json
+      src/
+      public/
+      ...
 
---- STEG 5: Installera add-onen ---
-1. Settings → Add-ons → Add-on Store → ... (tre punkter uppe till höger)
-2. "Check for updates" / "Reload"
-3. Familjeapp ska nu dyka upp under "Local add-ons"
-4. Klicka på den → Install → Start
+─────────────────────────────────────────────────────────────
+STEG 3 — Installera och starta tillägget
+─────────────────────────────────────────────────────────────
+1. Settings → Add-ons → Add-on Store
+2. Klicka på ... (tre punkter uppe till höger) → "Check for updates"
+3. "Familjeapp" dyker upp under "Local add-ons"
+4. Klicka Install → Start
+5. Aktivera "Show in sidebar" om du vill ha den i HA-menyn
 
---- FJÄRRÅTKOMST (valfritt) ---
-Enklaste alternativet: Home Assistant Cloud (Nabu Casa)
+─────────────────────────────────────────────────────────────
+STEG 4 — Öppna appen
+─────────────────────────────────────────────────────────────
+Från valfri enhet på samma WiFi:
+
+  http://<animus-ip>:3000
+
+  (Hitta IP:n under Settings → System → Network i HA,
+   eller prova http://homeassistant.local:3000)
+
+  Via HA Ingress (om du aktiverat det):
+  Settings → Add-ons → Familjeapp → "Open Web UI"
+
+─────────────────────────────────────────────────────────────
+HUR SYNKEN FUNGERAR
+─────────────────────────────────────────────────────────────
+  iPad (safari)   ─┐
+  Telefon (chrome)─┼──→  Animus Heart :3000  →  /data/familjeapp.json
+  Dator (chrome)  ─┘
+
+  • Alla enheter pratar med samma server → delar samma data.
+  • Data sparas i /data/familjeapp.json på Animus Heart (persistent).
+  • Om servern inte svarar faller appen tillbaka på localStorage
+    (fungerar alltså fortfarande utan server, t.ex. vid lokal utveckling).
+  • Ingen realtids-push ännu — andra enheter ser ändringar vid nästa
+    sidladdning eller när de öppnar appen.
+
+─────────────────────────────────────────────────────────────
+FJÄRRÅTKOMST (om du vill nå appen utanför hemmet)
+─────────────────────────────────────────────────────────────
+Alternativ A — Home Assistant Cloud (Nabu Casa, ~6 €/mån):
   Settings → Home Assistant Cloud → Starta provperiod
   Ger automatisk HTTPS-länk utan portöppning.
 
-Gratis alternativ: Cloudflare Tunnel add-on
+Alternativ B — Cloudflare Tunnel (gratis):
   Sök "Cloudflare Tunnel" i Add-on Store.
+  Kräver ett gratis Cloudflare-konto.
+
+─────────────────────────────────────────────────────────────
+UPPDATERA APPEN
+─────────────────────────────────────────────────────────────
+1. Gör ändringar i koden på din dator
+2. Kör  npm run build  igen
+3. Kopiera den nya build/-mappen till Animus Heart (se Steg 2)
+4. Starta om tillägget i HA: Add-ons → Familjeapp → Restart

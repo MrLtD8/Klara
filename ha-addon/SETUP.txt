@@ -1,0 +1,51 @@
+== SETUP - Familjeapp på Animus Home ==
+
+--- STEG 1: Flasha SD-kortet ---
+1. Ladda ner Raspberry Pi Imager: https://www.raspberrypi.com/software/
+2. Sätt in SD-kortet i datorn
+3. Öppna Imager → "Choose OS" → "Other specific-purpose OS"
+   → "Home Assistant and Home Automation" → "Home Assistant OS"
+   → Välj "Raspberry Pi Zero 2 W"
+4. Välj ditt SD-kort och klicka "Write"
+
+--- STEG 2: Första uppstart ---
+1. Sätt in kortet i Animus Home och koppla in strömmen
+2. Vänta ~5 minuter
+3. Öppna http://homeassistant.local:8123 i webbläsaren
+4. Följ setup-guiden
+
+--- STEG 3: Installera SSH Add-on ---
+1. Gå till Settings → Add-ons → Add-on Store
+2. Sök "Terminal & SSH" → Installera → Starta
+3. Aktivera "Show in sidebar"
+
+--- STEG 4: Kopiera familjeappen till HA ---
+Öppna terminalen i HA (sidopanelen) och kör:
+  mkdir -p /addons/familjeapp/app
+
+Kopiera sedan hela innehållet i ha-addon/ till /addons/familjeapp/
+på HA-systemet. Enklast via Samba-appen:
+  1. Installera "Samba share" add-on
+  2. Dela ut addons-mappen
+  3. Kopiera från din dator: \\homeassistant\addons\familjeapp\
+
+Strukturen ska se ut så:
+  /addons/familjeapp/
+    config.yaml
+    Dockerfile
+    nginx.conf
+    app/           ← hela familjeapp-projektet (ej node_modules)
+
+--- STEG 5: Installera add-onen ---
+1. Settings → Add-ons → Add-on Store → ... (tre punkter uppe till höger)
+2. "Check for updates" / "Reload"
+3. Familjeapp ska nu dyka upp under "Local add-ons"
+4. Klicka på den → Install → Start
+
+--- FJÄRRÅTKOMST (valfritt) ---
+Enklaste alternativet: Home Assistant Cloud (Nabu Casa)
+  Settings → Home Assistant Cloud → Starta provperiod
+  Ger automatisk HTTPS-länk utan portöppning.
+
+Gratis alternativ: Cloudflare Tunnel add-on
+  Sök "Cloudflare Tunnel" i Add-on Store.

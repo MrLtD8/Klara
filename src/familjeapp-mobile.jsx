@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocalStorage } from "./useLocalStorage";
 
 /* ─────────────────────────────────────────────────────────────
    DESIGN DIRECTION: Warm, refined iOS-native feel.
@@ -567,11 +568,11 @@ function PlanningScreen({tasks,setTasks,members}){
 }
 
 /* ─── PROFILE SCREEN ────────────────────────────────────────── */
-function ProfileScreen({members,family}){
+function ProfileScreen({members,family,tasks}){
   const stats=[
-    {label:"Totalt",  val:DEMO_TASKS.length,   color:C.amber},
-    {label:"Pågår",   val:DEMO_TASKS.filter(t=>t.lane==="progress").length, color:C.blue},
-    {label:"Klart",   val:DEMO_TASKS.filter(t=>t.lane==="done").length, color:C.green},
+    {label:"Totalt",  val:tasks.length,   color:C.amber},
+    {label:"Pågår",   val:tasks.filter(t=>t.lane==="progress").length, color:C.blue},
+    {label:"Klart",   val:tasks.filter(t=>t.lane==="done").length, color:C.green},
   ];
   return (
     <div style={{flex:1,overflowY:"auto",paddingBottom:90}}>
@@ -601,7 +602,7 @@ function ProfileScreen({members,family}){
         {/* Members */}
         <h3 style={{fontFamily:"'Fraunces',serif",fontSize:17,fontWeight:700,color:C.text,marginBottom:12}}>Familjemedlemmar</h3>
         {members.map(m=>{
-          const memberTasks=DEMO_TASKS.filter(t=>t.mids.includes(m.id));
+          const memberTasks=tasks.filter(t=>t.mids.includes(m.id));
           const done=memberTasks.filter(t=>t.lane==="done").length;
           return <div key={m.id} style={{background:C.surface,borderRadius:16,padding:"14px 16px",marginBottom:10,boxShadow:C.shadow,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:14}}>
             <div style={{width:44,height:44,borderRadius:14,background:m.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,color:"#fff",fontWeight:700,flexShrink:0,fontFamily:"'DM Sans',sans-serif"}}>{m.av}</div>
@@ -631,9 +632,10 @@ function ProfileScreen({members,family}){
 /* ─── MAIN APP ──────────────────────────────────────────────── */
 export default function MobileApp(){
   const [tab,setTab]=useState("home");
-  const [tasks,setTasks]=useState(DEMO_TASKS);
-  const [members]=useState(DEMO_MEMBERS);
-  const [family]=useState({name:"Landerstedts"});
+  // Delar fp_tasks och fp_family med dashboard-appen (samma localStorage-nycklar)
+  const [tasks,setTasks]=useLocalStorage("fp_tasks",[]);
+  const [family]=useLocalStorage("fp_family",{name:"Familjen",members:[]});
+  const members=family.members||[];
   const [showQuick,setShowQuick]=useState(false);
 
   const handleTab=(id)=>{
@@ -684,7 +686,7 @@ export default function MobileApp(){
           :tab==="home"    ?<HomeScreen    tasks={tasks} setTasks={setTasks} members={members}/>
           :tab==="tasks"   ?<KanbanScreen  tasks={tasks} setTasks={setTasks} members={members}/>
           :tab==="plan"    ?<PlanningScreen tasks={tasks} setTasks={setTasks} members={members}/>
-          :tab==="profile" ?<ProfileScreen members={members} family={family}/>
+          :tab==="profile" ?<ProfileScreen members={members} family={family} tasks={tasks}/>
           :null
         }
       </div>

@@ -55,6 +55,25 @@ const CAL_EVENTS_DEMO=[
   {time:"17:00",title:"Simning",who:"Max",color:"#3A7A52"},
   {time:"18:30",title:"Middag hemma",who:"Alla",color:"#B8722A"},
 ];
+
+// Standardmallar — återanvändbara grupper av uppgifter
+const DEFAULT_TEMPLATES=[
+  {id:1,name:"Veckostäd",icon:"🧹",tasks:[
+    {title:"Starta robotdamsugare uppe",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Starta robotdamsugare nere",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Toalett uppe",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Toalett nere",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Damtorka",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Tömma papperskorgar",prio:"low",tags:["Hem"],mids:[]},
+  ]},
+  {id:2,name:"Storstäd",icon:"🏠",tasks:[
+    {title:"Dammsuga hela huset",prio:"high",tags:["Hem"],mids:[]},
+    {title:"Moppa golv",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Rengöra ugn",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Byta lakan",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Putsa fönster",prio:"low",tags:["Hem"],mids:[]},
+  ]},
+];
 // Get school lunch for a given date from the repeating weekly menu
 function getSchoolLunch(date, schoolMenu){
   const dayJS=date.getDay(); // 0=Sun, 1=Mon...
@@ -438,49 +457,212 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode}){
   </div>;
 }
 
+/* ═══ TEMPLATE EDITOR ═══════════════════════════════════════════ */
+function TemplateEditor({T,members,init,onSave,onCancel}){
+  const [name,setName]=useState(init?.name||"");
+  const [icon,setIcon]=useState(init?.icon||"📦");
+  const [taskList,setTaskList]=useState(()=>init?.tasks?.length ? init.tasks.map(t=>({...t})) : [{title:"",prio:"medium",mids:[],tags:[]}]);
+
+  const addTask=()=>setTaskList(p=>[...p,{title:"",prio:"medium",mids:[],tags:[]}]);
+  const updTask=(i,field,val)=>setTaskList(p=>p.map((t,j)=>j===i?{...t,[field]:val}:t));
+  const remTask=i=>setTaskList(p=>p.filter((_,j)=>j!==i));
+  const toggleMid=(i,mid)=>updTask(i,"mids",(taskList[i].mids||[]).includes(mid)?(taskList[i].mids||[]).filter(x=>x!==mid):[...(taskList[i].mids||[]),mid]);
+
+  const save=()=>{
+    if(!name.trim())return;
+    const tasks=taskList.filter(t=>t.title.trim());
+    if(!tasks.length)return;
+    onSave({...init,name:name.trim(),icon:icon.trim()||"📦",tasks});
+  };
+
+  return <div style={{background:T.card,backdropFilter:T.blur,borderRadius:12,border:`2px solid ${T.amber}`,padding:12,marginBottom:8}}>
+    <p style={{fontSize:10,fontWeight:700,color:T.amber,marginBottom:8}}>{init?"✏️ Redigera":"📦 Ny"} mall</p>
+    {/* Name + icon */}
+    <div style={{display:"flex",gap:6,marginBottom:10}}>
+      <input value={icon} onChange={e=>setIcon(e.target.value)} title="Emoji/ikon" style={{width:44,padding:"5px",borderRadius:7,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:18,textAlign:"center",fontFamily:"inherit",outline:"none"}}/>
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Mallens namn, t.ex. Veckostäd" style={{flex:1,padding:"6px 10px",borderRadius:7,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+    </div>
+    {/* Tasks */}
+    <p style={{fontSize:9,color:T.textDim,marginBottom:6,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>Uppgifter i mallen</p>
+    <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:7}}>
+      {taskList.map((t,i)=>(
+        <div key={i} style={{borderRadius:8,border:`1px solid ${T.border}`,background:T.surface,padding:"7px 8px",display:"flex",flexDirection:"column",gap:5}}>
+          <div style={{display:"flex",gap:5,alignItems:"center"}}>
+            <input value={t.title} onChange={e=>updTask(i,"title",e.target.value)} placeholder={`Uppgift ${i+1}…`}
+              style={{flex:1,padding:"5px 8px",borderRadius:6,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+            <button onClick={()=>remTask(i)} disabled={taskList.length===1} style={{background:"none",border:"none",cursor:taskList.length===1?"default":"pointer",color:T.textDim,fontSize:14,lineHeight:1,opacity:taskList.length===1?.3:1}}>✕</button>
+          </div>
+          <div style={{display:"flex",gap:3,flexWrap:"wrap",alignItems:"center"}}>
+            {/* Prio */}
+            {Object.entries(PRIO_META).map(([k,v])=>(
+              <button key={k} onClick={()=>updTask(i,"prio",k)} title={v.label} style={{padding:"2px 6px",borderRadius:5,border:`1.5px solid ${t.prio===k?v.color:T.border}`,background:t.prio===k?v.bg:"transparent",cursor:"pointer",fontSize:9,fontWeight:t.prio===k?700:400,color:t.prio===k?v.color:T.textDim}}>{v.icon} {v.label}</button>
+            ))}
+            {/* Members */}
+            {members.length>0&&<>
+              <span style={{fontSize:9,color:T.textDim,margin:"0 2px"}}>·</span>
+              {members.map(m=>(
+                <button key={m.id} onClick={()=>toggleMid(i,m.id)} style={{width:22,height:22,borderRadius:"50%",border:`2px solid ${(t.mids||[]).includes(m.id)?m.color:T.border}`,background:(t.mids||[]).includes(m.id)?m.color+"33":"transparent",cursor:"pointer",fontSize:9,fontWeight:700,color:m.color}}>{m.av}</button>
+              ))}
+            </>}
+          </div>
+        </div>
+      ))}
+    </div>
+    <button onClick={addTask} style={{width:"100%",padding:"5px",borderRadius:7,border:`1px dashed ${T.border}`,background:"transparent",color:T.amber,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:8}}>+ Lägg till uppgift</button>
+    <div style={{display:"flex",gap:6}}>
+      <button onClick={onCancel} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.border}`,background:"transparent",color:T.textMid,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Avbryt</button>
+      <button onClick={save} style={{flex:2,padding:"7px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Spara mall</button>
+    </div>
+  </div>;
+}
+
 /* ═══ PLANNING ══════════════════════════════════════════════════ */
-function PlanningTab({T,backlog,setBacklog,tasks,setTasks,members}){
+function PlanningTab({T,backlog,setBacklog,tasks,setTasks,members,templates,setTemplates}){
+  const [planView,setPlanView]=useState("backlog"); // backlog | templates
   const [editing,setEditing]=useState(null);
+  const [editTmpl,setEditTmpl]=useState(null); // null | "new" | {template obj}
+  const [expandedTmpl,setExpandedTmpl]=useState(null);
+
+  // ── Backlog ──────────────────────────────────────────────────
   const saveToBacklog=(f)=>{if(editing==="new")setBacklog(p=>[...p,{...makeTask(),...f,id:Date.now()}]);else setBacklog(p=>p.map(b=>b.id===editing.id?{...b,...f}:b));setEditing(null);};
   const del=id=>setBacklog(p=>p.filter(b=>b.id!==id));
   const send=(item)=>{setTasks(p=>[...p,{...item,id:Date.now(),lane:"ready",order:p.filter(t=>t.lane==="ready").length}]);setBacklog(p=>p.filter(b=>b.id!==item.id));};
   const prioOrd={urgent:0,high:1,medium:2,low:3};
   const sorted=[...backlog].sort((a,b)=>prioOrd[a.prio]-prioOrd[b.prio]);
 
+  // ── Templates ────────────────────────────────────────────────
+  const activateTmpl=(tmpl)=>{
+    const base=tasks.filter(t=>t.lane==="ready").length;
+    const newTasks=tmpl.tasks.map((t,i)=>({
+      ...makeTask(),...t,
+      id:Date.now()+i,lane:"ready",order:base+i,
+      desc:t.desc||"",recur:t.recur||"none",hideGuest:false,
+    }));
+    setTasks(p=>[...p,...newTasks]);
+  };
+  const deleteTmpl=id=>setTemplates(p=>p.filter(t=>t.id!==id));
+  const saveTmpl=(tmpl)=>{
+    if(editTmpl==="new")setTemplates(p=>[...p,{...tmpl,id:Date.now()}]);
+    else setTemplates(p=>p.map(t=>t.id===tmpl.id?tmpl:t));
+    setEditTmpl(null);
+  };
+
   return <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
-    <div style={{padding:"9px 14px 7px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-      <div><span style={{fontSize:12,fontWeight:700,color:T.text}}>Planering & Backlogg</span><p style={{fontSize:9,color:T.textDim}}>Planera aktiviteter och skicka till tavlan</p></div>
-      <button onClick={()=>setEditing("new")} style={{padding:"3px 11px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Ny</button>
+
+    {/* ── Header with sub-tabs ── */}
+    <div style={{padding:"9px 14px 0",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
+        <span style={{fontSize:12,fontWeight:700,color:T.text}}>Planering</span>
+        <button onClick={()=>planView==="backlog"?setEditing("new"):setEditTmpl("new")}
+          style={{padding:"3px 11px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Ny</button>
+      </div>
+      <div style={{display:"flex"}}>
+        {[["backlog","📋 Backlogg"],["templates","📦 Mallar"]].map(([id,label])=>(
+          <button key={id} onClick={()=>setPlanView(id)} style={{
+            flex:1,padding:"6px 4px",border:"none",
+            borderBottom:`2.5px solid ${planView===id?T.amber:"transparent"}`,
+            background:planView===id?T.amberBg:"transparent",
+            color:planView===id?T.amber:T.textDim,
+            fontSize:11,fontWeight:planView===id?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",
+          }}>{label}</button>
+        ))}
+      </div>
     </div>
-    {editing&&<div style={{padding:"7px 14px",flexShrink:0,borderBottom:`1px solid ${T.border}`}}><TaskForm T={T} members={members} init={editing!=="new"?{...editing}:EMPTY_FORM} onSave={saveToBacklog} onCancel={()=>setEditing(null)} showLane={false} showHideGuest/></div>}
-    <div style={{flex:1,overflowY:"auto",padding:"9px 14px 12px",display:"flex",flexDirection:"column",gap:7}}>
-      {sorted.length===0&&<div style={{textAlign:"center",padding:"28px",color:T.textDim,fontSize:13}}>Tom — tryck "+ Ny"</div>}
-      {sorted.map(item=>{
-        const pm=PRIO_META[item.prio]||PRIO_META.medium;
-        return <div key={item.id} style={{borderRadius:12,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden"}}>
-          <div style={{padding:"10px 12px",display:"flex",gap:7,alignItems:"center"}}>
-            <div style={{width:3,borderRadius:3,alignSelf:"stretch",background:pm.color,flexShrink:0,minHeight:30}}/>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
-                <span style={{fontSize:12,fontWeight:700,color:T.text}}>{item.title}</span>
-                {item.hideGuest&&<span style={{fontSize:8,padding:"1px 5px",borderRadius:999,background:"#9B8DC922",color:"#9B8DC9",fontWeight:700}}>🙈</span>}
+
+    {/* ── BACKLOG ── */}
+    {planView==="backlog"&&<>
+      {editing&&<div style={{padding:"7px 14px",flexShrink:0,borderBottom:`1px solid ${T.border}`}}>
+        <TaskForm T={T} members={members} init={editing!=="new"?{...editing}:EMPTY_FORM} onSave={saveToBacklog} onCancel={()=>setEditing(null)} showLane={false} showHideGuest/>
+      </div>}
+      <div style={{flex:1,overflowY:"auto",padding:"9px 14px 12px",display:"flex",flexDirection:"column",gap:7}}>
+        {sorted.length===0&&<div style={{textAlign:"center",padding:"28px",color:T.textDim,fontSize:13}}>Tom — tryck "+ Ny"</div>}
+        {sorted.map(item=>{
+          const pm=PRIO_META[item.prio]||PRIO_META.medium;
+          return <div key={item.id} style={{borderRadius:12,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden"}}>
+            <div style={{padding:"10px 12px",display:"flex",gap:7,alignItems:"center"}}>
+              <div style={{width:3,borderRadius:3,alignSelf:"stretch",background:pm.color,flexShrink:0,minHeight:30}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
+                  <span style={{fontSize:12,fontWeight:700,color:T.text}}>{item.title}</span>
+                  {item.hideGuest&&<span style={{fontSize:8,padding:"1px 5px",borderRadius:999,background:"#9B8DC922",color:"#9B8DC9",fontWeight:700}}>🙈</span>}
+                </div>
+                <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                  <span style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:pm.bg,color:pm.color,fontWeight:700}}>{pm.icon} {pm.label}</span>
+                  {item.recur!=="none"&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:T.blueBg,color:T.blue,fontWeight:700}}>🔁 {RECUR_OPTIONS.find(r=>r.val===item.recur)?.label}</span>}
+                  {item.tags.map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
+                </div>
+                {item.desc&&<p style={{fontSize:10,color:T.textMid,marginTop:3,lineHeight:1.4}}>{item.desc}</p>}
               </div>
-              <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                <span style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:pm.bg,color:pm.color,fontWeight:700}}>{pm.icon} {pm.label}</span>
-                {item.recur!=="none"&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:T.blueBg,color:T.blue,fontWeight:700}}>🔁 {RECUR_OPTIONS.find(r=>r.val===item.recur)?.label}</span>}
-                {item.tags.map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
-              </div>
-              {item.desc&&<p style={{fontSize:10,color:T.textMid,marginTop:3,lineHeight:1.4}}>{item.desc}</p>}
             </div>
+            <div style={{padding:"0 12px 9px",display:"flex",gap:4,flexWrap:"wrap",borderTop:`1px solid ${T.border}`,paddingTop:7}}>
+              <button onClick={()=>send(item)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.green}`,background:T.greenBg,color:T.green,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>→ Tavlan</button>
+              <button onClick={()=>setEditing(item)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
+              <button onClick={()=>del(item.id)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
+            </div>
+          </div>;
+        })}
+      </div>
+    </>}
+
+    {/* ── MALLAR ── */}
+    {planView==="templates"&&<div style={{flex:1,overflowY:"auto",padding:"9px 14px 12px",display:"flex",flexDirection:"column",gap:8}}>
+      {/* Template editor (inline) */}
+      {editTmpl&&<TemplateEditor T={T} members={members}
+        init={editTmpl==="new"?null:editTmpl}
+        onSave={saveTmpl} onCancel={()=>setEditTmpl(null)}/>}
+
+      {templates.length===0&&!editTmpl&&<div style={{textAlign:"center",padding:"28px",color:T.textDim,fontSize:13}}>
+        Inga mallar ännu — tryck "+ Ny" för att skapa den första
+      </div>}
+
+      {templates.map(tmpl=>{
+        const expanded=expandedTmpl===tmpl.id;
+        return <div key={tmpl.id} style={{borderRadius:12,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden"}}>
+          {/* Header row */}
+          <div style={{padding:"11px 12px",display:"flex",alignItems:"center",gap:9}}>
+            <span style={{fontSize:22,flexShrink:0,lineHeight:1}}>{tmpl.icon||"📦"}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontSize:13,fontWeight:700,color:T.text,lineHeight:1.2}}>{tmpl.name}</p>
+              <p style={{fontSize:10,color:T.textDim,marginTop:2}}>{tmpl.tasks.length} uppgifter</p>
+            </div>
+            <button onClick={()=>setExpandedTmpl(expanded?null:tmpl.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.textDim,transform:expanded?"rotate(0deg)":"rotate(-90deg)",transition:"transform .2s",lineHeight:1,flexShrink:0}}>▾</button>
           </div>
-          <div style={{padding:"0 12px 9px",display:"flex",gap:4,flexWrap:"wrap",borderTop:`1px solid ${T.border}`,paddingTop:7}}>
-            <button onClick={()=>send(item)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.green}`,background:T.greenBg,color:T.green,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>→ Tavlan</button>
-            <button onClick={()=>setEditing(item)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
-            <button onClick={()=>del(item.id)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
-          </div>
+
+          {/* Expanded task list */}
+          {expanded&&<div style={{borderTop:`1px solid ${T.border}`,padding:"8px 12px 10px"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:9}}>
+              {tmpl.tasks.map((t,i)=>{
+                const pm=PRIO_META[t.prio]||PRIO_META.medium;
+                const assignees=members.filter(m=>(t.mids||[]).includes(m.id));
+                return <div key={i} style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",borderRadius:7,background:T.surface,border:`1px solid ${T.border}`}}>
+                  <div style={{width:3,minHeight:14,alignSelf:"stretch",borderRadius:2,background:pm.color,flexShrink:0}}/>
+                  <span style={{fontSize:11,color:T.text,flex:1,lineHeight:1.3}}>{t.title}</span>
+                  {assignees.map(m=><div key={m.id} style={{width:18,height:18,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700,flexShrink:0}}>{m.av}</div>)}
+                  <span style={{fontSize:9,color:pm.color,fontWeight:700,flexShrink:0}}>{pm.icon}</span>
+                </div>;
+              })}
+            </div>
+            <div style={{display:"flex",gap:5}}>
+              <button onClick={()=>{activateTmpl(tmpl);setExpandedTmpl(null);}}
+                style={{flex:2,padding:"7px 10px",borderRadius:8,border:"none",background:T.green,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✅ Aktivera → Tavlan</button>
+              <button onClick={()=>setEditTmpl(tmpl)}
+                style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
+              <button onClick={()=>deleteTmpl(tmpl.id)}
+                style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
+            </div>
+          </div>}
+
+          {/* Quick activate (collapsed) */}
+          {!expanded&&<div style={{padding:"0 12px 10px"}}>
+            <button onClick={()=>activateTmpl(tmpl)}
+              style={{width:"100%",padding:"6px",borderRadius:8,border:`1px solid ${T.green}33`,background:T.greenBg,color:T.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              ✅ Aktivera — {tmpl.tasks.length} uppgifter → Tavlan
+            </button>
+          </div>}
         </div>;
       })}
-    </div>
+    </div>}
+
   </div>;
 }
 
@@ -1312,6 +1494,7 @@ export default function App(){
   const gcal=useGoogleCalendar(gcalClientId);
   const [choresDone,setChoresDone]=useLocalStorage("fp_chores_done",{});
   const [choresList,setChoresList]=useLocalStorage("fp_chores_list",null); // null = använd CHORES_LIST från constants
+  const [templates,setTemplates]=useLocalStorage("fp_templates",DEFAULT_TEMPLATES);
 
   const T=cfg.dark?THEMES.dark:THEMES.light;
   const toggleMed=(fid,idx)=>setFlowMeds(p=>{const arr=[...p[fid]];arr[idx]={...arr[idx],done:!arr[idx].done};return{...p,[fid]:arr};});
@@ -1422,7 +1605,7 @@ export default function App(){
               </div>
               <div style={{flex:1,overflow:"hidden",background:T.card,backdropFilter:T.blur}}>
                 {activeTab==="kanban"&&<KanbanBoard T={T} tasks={tasks} setTasks={setTasks} members={family.members} guestMode={cfg.guestMode}/>}
-                {activeTab==="planning"&&<PlanningTab T={T} backlog={backlog} setBacklog={setBacklog} tasks={tasks} setTasks={setTasks} members={family.members}/>}
+                {activeTab==="planning"&&<PlanningTab T={T} backlog={backlog} setBacklog={setBacklog} tasks={tasks} setTasks={setTasks} members={family.members} templates={templates} setTemplates={setTemplates}/>}
                 {activeTab==="sysslor"&&<KidsPointsTab T={T} members={family.members} choresDone={choresDone} setChoresDone={setChoresDone} choresList={choresList||CHORES_LIST}/>}
                 {activeTab==="smarthome"&&<div style={{padding:"20px",color:T.textMid,fontSize:13,textAlign:"center",paddingTop:40}}>🏠 Smarta hem<br/><span style={{fontSize:11,color:T.textDim}}>Roborock, Spotify, Hue & Nest</span></div>}
               </div>

@@ -1068,6 +1068,52 @@ function HueLampRow({T,lamps,setLamps}){
   </div>;
 }
 
+/* ═══ SMART SCHOOL-MENU PARSER ══════════════════════════════════
+ * Hanterar copy-paste från PDF-matsedlar (radbruten tabelltext).
+ * Regel: ny rätt = rad börjar med stor bokstav OCH föregående rad
+ *        slutar INTE med ett bindningsord (med, och, &, …).
+ * ════════════════════════════════════════════════════════════════ */
+function parseSchoolPaste(raw){
+  const DAYS_SV=["monday","tuesday","wednesday","thursday","friday"];
+  const DAY_RE=/måndag|tisdag|onsdag|torsdag|fredag/i;
+  const WEEK_RE=/^vecka\s+\d+/i;
+  const CONNECTOR=/\b(med|och|i|på|av|till|från|ur|samt)\s*$|[&]\s*$/i;
+  const CAPITAL=/^[A-ZÅÄÖ]/;
+
+  // 1. Rensa headers
+  const lines=raw.split("\n")
+    .map(l=>l.trim()).filter(Boolean)
+    .filter(l=>!WEEK_RE.test(l))                          // "Vecka 17"
+    .filter(l=>(l.match(DAY_RE)||[]).length<2);           // dagnamnsrad
+
+  // 2. Slå ihop radbrutna maträtter
+  const meals=[];
+  let cur="";
+  lines.forEach((line,i)=>{
+    const prev=i>0?lines[i-1]:"";
+    const isNew=CAPITAL.test(line)&&!CONNECTOR.test(prev)&&i>0;
+    if(isNew&&cur){meals.push(cur.trim());cur=line;}
+    else{cur=cur?cur+" "+line:line;}
+  });
+  if(cur.trim())meals.push(cur.trim());
+
+  // 3. Fördela på dagar
+  // Om vi fick 10 rätter → 2 rätter/dag (kött + vego), visa som "rätt 1 / rätt 2"
+  const n=meals.length;
+  const result={};
+  if(n>=10){
+    DAYS_SV.forEach((d,i)=>{
+      result[d]=[meals[i],meals[i+5]].filter(Boolean).join(" / ");
+    });
+  } else if(n>=5){
+    DAYS_SV.forEach((d,i)=>{result[d]=meals[i]||"";});
+  } else if(n>0){
+    // Färre rätter än 5 — fyll in så många vi har
+    DAYS_SV.forEach((d,i)=>{if(meals[i])result[d]=meals[i];});
+  }
+  return result;
+}
+
 /* ═══ SETTINGS ══════════════════════════════════════════════════ */
 function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,schoolMenu,setSchoolMenu,gcal,gcalClientId,setGcalClientId,flowMeds,setFlowMeds,choresList,setChoresList,setChoresDone,onClose}){
   const set=(k,v)=>setCfg(s=>({...s,[k]:v}));
@@ -1234,27 +1280,12 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
           <div style={{marginBottom:12,padding:"10px 12px",borderRadius:9,background:T.surface,border:`1px solid ${T.border}`}}>
             <p style={{fontSize:10,fontWeight:700,color:T.textMid,marginBottom:6}}>📋 Klistra in veckomeny</p>
             <textarea value={schoolPaste} onChange={e=>setSchoolPaste(e.target.value)}
-              placeholder={"Klistra in matsedeln här.\nMåndag: Köttbullar med mos\nTisdag: Fiskpinnar\n...\nEller: en rätt per rad (mån–fre i ordning)."}
+              placeholder={"Klistra in matsedeln här — fungerar med PDF-kopia!\n\nExempel:\nVecka 17\nMåndag 20/4  Tisdag 21/4  Onsdag 22/4 ...\nSojafärssås med\npasta\nKebabtallrik med\nris & vitlökssås\n..."}
               rows={6} style={{width:"100%",padding:"8px 10px",borderRadius:7,border:`1.5px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",resize:"vertical",marginBottom:6,boxSizing:"border-box"}}/>
             <button onClick={()=>{
-              const text=schoolPaste;
-              const days={monday:"",tuesday:"",wednesday:"",thursday:"",friday:""};
-              const patterns=[
-                [/måndag[:\s]+(.+)/i,"monday"],[/tisdag[:\s]+(.+)/i,"tuesday"],
-                [/onsdag[:\s]+(.+)/i,"wednesday"],[/torsdag[:\s]+(.+)/i,"thursday"],
-                [/fredag[:\s]+(.+)/i,"friday"],
-                [/monday[:\s]+(.+)/i,"monday"],[/tuesday[:\s]+(.+)/i,"tuesday"],
-                [/wednesday[:\s]+(.+)/i,"wednesday"],[/thursday[:\s]+(.+)/i,"thursday"],
-                [/friday[:\s]+(.+)/i,"friday"],
-              ];
-              let matched=false;
-              patterns.forEach(([re,key])=>{const m=text.match(re);if(m){days[key]=m[1].trim();matched=true;}});
-              if(!matched){
-                const lines=text.split("\n").map(l=>l.trim()).filter(Boolean);
-                const keys=["monday","tuesday","wednesday","thursday","friday"];
-                lines.forEach((l,i)=>{if(i<5)days[keys[i]]=l;});
-              }
-              setSchool(s=>({...s,...Object.fromEntries(Object.entries(days).filter(([,v])=>v))}));
+              const parsed=parseSchoolPaste(schoolPaste);
+              if(Object.keys(parsed).length===0){alert("Kunde inte tolka matsedeln — prova att klistra in hela texten inklusive dagnamnen.");return;}
+              setSchool(s=>({...s,...parsed}));
               setSchoolPaste("");
             }} style={{width:"100%",padding:"6px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Tolka och fyll i automatiskt</button>
           </div>

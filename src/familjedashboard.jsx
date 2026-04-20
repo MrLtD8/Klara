@@ -2150,6 +2150,163 @@ function ListorTab({T,bucketList,setBucketList,sommarList,setSommarList}){
   </div>;
 }
 
+/* ═══ FAMILJEASSISTENTEN ════════════════════════════════════════ */
+function FamiljeAssistentTab({T,tasks,flowMeds,family}){
+  const [calEvents]=useLocalStorage("fp_calevents",[]);
+  const now=new Date();
+  const todayStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  const hour=now.getHours();
+  const [view,setView]=useState("rapport"); // rapport|ai
+  const [aiKey,setAiKey]=useLocalStorage("fp_ai_key","");
+  const [aiInput,setAiInput]=useState("");
+  const [aiResult,setAiResult]=useState("");
+  const [aiLoading,setAiLoading]=useState(false);
+  const [aiError,setAiError]=useState(null);
+  const [showKey,setShowKey]=useState(false);
+
+  // Morning or evening?
+  const isEvening=hour>=16;
+  const greeting=hour<10?"God morgon":hour<12?"God förmiddag":hour<17?"God eftermiddag":"God kväll";
+
+  // Today's events from calEvents
+  const todayEvents=(calEvents||[]).filter(e=>e.date===todayStr).sort((a,b)=>a.time?.localeCompare(b.time||""));
+
+  // Active tasks
+  const openTasks=(tasks||[]).filter(t=>t.lane!=="done");
+  const doneTasks=(tasks||[]).filter(t=>t.lane==="done");
+
+  // Today's medicines
+  const allMeds=Object.values(flowMeds||{}).flat();
+  const medsTotal=allMeds.length;
+  const medsDone=allMeds.filter(m=>m.done).length;
+
+  // Tip of the day
+  const TIPS=["Sätt av 15 minuter för att planera kvällen ihop","Fråga barnen vad de bästa och sämsta med dagen var","Ring en vän eller släkting du inte hört från ett tag","Gå en kvällspromenad tillsammans","Läs en bok istället för mobilen innan läggdags"];
+  const tip=TIPS[now.getDate()%TIPS.length];
+
+  async function summarize(){
+    if(!aiKey.trim()||!aiInput.trim())return;
+    setAiLoading(true);setAiError(null);setAiResult("");
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":aiKey,"anthropic-version":"2023-06-01"},
+        body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:512,messages:[{role:"user",content:`Sammanfatta följande text/e-post på svenska i 3-5 meningar. Lyft fram viktiga åtgärdspunkter och datum:\n\n${aiInput}`}]})
+      });
+      if(!res.ok)throw new Error(`API-fel ${res.status}`);
+      const data=await res.json();
+      setAiResult(data.content?.[0]?.text||"Inget svar");
+    }catch(e){setAiError(e.message);}
+    setAiLoading(false);
+  }
+
+  const btnStyle=(active)=>({padding:"6px 14px",borderRadius:20,border:`1.5px solid ${active?T.amber:T.border}`,background:active?T.amberBg:"transparent",color:active?T.amber:T.textMid,fontSize:11,fontWeight:active?700:400,cursor:"pointer",fontFamily:"inherit"});
+  const cardS={background:T.card,borderRadius:12,border:`1px solid ${T.border}`,padding:"12px 14px"};
+  const sectionLbl={fontSize:9,color:T.textDim,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",margin:"0 0 8px"};
+
+  return <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:12,maxWidth:760,margin:"0 auto",width:"100%"}}>
+    <div style={{display:"flex",gap:6}}>
+      <button onClick={()=>setView("rapport")} style={btnStyle(view==="rapport")}>📊 Dagsrapport</button>
+      <button onClick={()=>setView("ai")} style={btnStyle(view==="ai")}>🤖 AI-assistent</button>
+    </div>
+
+    {view==="rapport"&&<>
+      {/* Greeting card */}
+      <div style={{background:`linear-gradient(135deg,${isEvening?"#1a1a2e,#16213e":"#6B4EA8,#9B84D8"})`,borderRadius:14,padding:"16px 20px",color:"#fff"}}>
+        <p style={{fontSize:9,opacity:0.7,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",margin:"0 0 4px"}}>{new Date().toLocaleDateString("sv-SE",{weekday:"long",day:"numeric",month:"long"})}</p>
+        <p style={{fontSize:22,fontWeight:700,margin:"0 0 6px"}}>{greeting}, {family?.name||"Familjen"}! {isEvening?"🌙":"☀️"}</p>
+        <p style={{fontSize:12,opacity:0.85,margin:0,lineHeight:1.6}}>{isEvening?"Här är en sammanfattning av er dag.":"Här är vad som händer idag."}</p>
+      </div>
+
+      {/* Stats row */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+        {[
+          {icon:"📋",lbl:"Öppna tasks",val:openTasks.length,sub:`${doneTasks.length} klara`},
+          {icon:"💊",lbl:"Mediciner",val:`${medsDone}/${medsTotal}`,sub:"tagits idag"},
+          {icon:"📅",lbl:"Händelser",val:todayEvents.length,sub:"idag"},
+        ].map(({icon,lbl,val,sub})=>(
+          <div key={lbl} style={{...cardS,textAlign:"center"}}>
+            <p style={{fontSize:20,margin:"0 0 4px"}}>{icon}</p>
+            <p style={{fontSize:18,fontWeight:700,color:T.text,margin:"0 0 2px"}}>{val}</p>
+            <p style={{fontSize:9,color:T.textDim,margin:0}}>{lbl}</p>
+            <p style={{fontSize:9,color:T.textDim,margin:0}}>{sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Today's events */}
+      {todayEvents.length>0&&<div style={cardS}>
+        <p style={sectionLbl}>📅 Idag</p>
+        {todayEvents.map((e,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:i<todayEvents.length-1?`1px solid ${T.border}`:"none"}}>
+            {e.time&&<span style={{fontSize:10,color:T.amber,fontWeight:700,width:36,flexShrink:0}}>{e.time}</span>}
+            <span style={{fontSize:14,flexShrink:0}}>{e.icon||"📅"}</span>
+            <div style={{flex:1}}><p style={{fontSize:11,color:T.text,fontWeight:600,margin:0}}>{e.title}</p>{e.who&&<p style={{fontSize:9,color:T.textDim,margin:0}}>{e.who}</p>}</div>
+          </div>
+        ))}
+      </div>}
+
+      {/* Open tasks */}
+      {openTasks.length>0&&<div style={cardS}>
+        <p style={sectionLbl}>📋 Att göra</p>
+        {openTasks.slice(0,5).map(t=>(
+          <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`}}>
+            <span style={{fontSize:10,padding:"1px 6px",borderRadius:999,background:t.prio==="urgent"?"#fdecea":t.prio==="high"?"#fff3e0":T.surface,color:t.prio==="urgent"?"#c0392b":t.prio==="high"?"#d68a00":T.textDim,fontWeight:700}}>{t.prio==="urgent"?"🔴":t.prio==="high"?"🟡":"🔵"}</span>
+            <p style={{fontSize:11,color:T.text,flex:1,margin:0}}>{t.title}</p>
+            <span style={{fontSize:9,color:T.textDim}}>{t.lane==="progress"?"Pågår":"Klar att starta"}</span>
+          </div>
+        ))}
+        {openTasks.length>5&&<p style={{fontSize:10,color:T.textDim,margin:"6px 0 0",textAlign:"center"}}>+{openTasks.length-5} till…</p>}
+      </div>}
+
+      {/* Tip */}
+      <div style={{background:"#fffbea",borderRadius:10,border:"1px solid #ffe082",padding:"10px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
+        <span style={{fontSize:18,flexShrink:0}}>💡</span>
+        <div><p style={{fontSize:9,color:"#b8860b",fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",margin:"0 0 3px"}}>Dagens tips</p><p style={{fontSize:11,color:"#5A4E3C",margin:0,lineHeight:1.5}}>{tip}</p></div>
+      </div>
+    </>}
+
+    {view==="ai"&&<>
+      {/* API key */}
+      <div style={cardS}>
+        <p style={sectionLbl}>🔑 Claude API-nyckel</p>
+        <div style={{display:"flex",gap:6}}>
+          <input type={showKey?"text":"password"} value={aiKey} onChange={e=>setAiKey(e.target.value)} placeholder="sk-ant-…" style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+          <button onClick={()=>setShowKey(s=>!s)} style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:"transparent",cursor:"pointer",fontSize:13}}>{showKey?"🙈":"👁️"}</button>
+        </div>
+        <p style={{fontSize:9,color:T.textDim,margin:"5px 0 0"}}>Nyckeln sparas lokalt i webbläsaren. Skaffa på console.anthropic.com.</p>
+      </div>
+
+      {/* Text input */}
+      <div style={cardS}>
+        <p style={sectionLbl}>📧 Klistra in e-post eller text att sammanfatta</p>
+        <textarea value={aiInput} onChange={e=>setAiInput(e.target.value)} placeholder="Klistra in e-posttext, mötesanteckningar eller annan text här…" rows={7} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+        <button onClick={summarize} disabled={aiLoading||!aiKey.trim()||!aiInput.trim()} style={{width:"100%",marginTop:8,padding:"9px",borderRadius:9,border:"none",background:aiLoading||!aiKey.trim()||!aiInput.trim()?"#ccc":"linear-gradient(135deg,#667eea,#764ba2)",color:"#fff",fontWeight:700,fontSize:12,cursor:aiLoading?"default":"pointer",fontFamily:"inherit"}}>
+          {aiLoading?"Sammanfattar…":"🤖 Sammanfatta med Claude"}
+        </button>
+        {aiError&&<p style={{fontSize:11,color:"#c0392b",marginTop:6}}>{aiError}</p>}
+      </div>
+
+      {/* Result */}
+      {aiResult&&<div style={{...cardS,background:"linear-gradient(135deg,#f8f4ff,#ede8ff)",border:"1px solid #9B84D8"}}>
+        <p style={{...sectionLbl,color:"#6B4EA8"}}>✨ Sammanfattning</p>
+        <p style={{fontSize:12,color:"#3a2c5a",lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{aiResult}</p>
+      </div>}
+
+      {/* Usage info */}
+      <div style={{...cardS,background:T.surface}}>
+        <p style={{...sectionLbl}}>🛠️ Vad kan assistenten göra?</p>
+        {["Sammanfatta långa e-postkedjor på svenska","Extrahera åtgärdspunkter och datum från text","Förkorta mötesprotokoll till bullet points","Förklara komplex text enkelt för hela familjen"].map((t,i)=>(
+          <div key={i} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:i<3?`1px solid ${T.border}`:"none"}}>
+            <span style={{fontSize:12,flexShrink:0}}>•</span>
+            <p style={{fontSize:11,color:T.text,margin:0}}>{t}</p>
+          </div>
+        ))}
+      </div>
+    </>}
+  </div>;
+}
+
 /* ═══ MAIN APP ══════════════════════════════════════════════════ */
 export default function App(){
   const now=useClock();
@@ -2193,7 +2350,7 @@ export default function App(){
   const PHOTO="https://images.unsplash.com/photo-1511895426328-dc8714191011?w=1600&q=80";
 
   // 🔧 Smarta hem-fliken är tillfälligt dold — ta bort kommentaren för att aktivera igen:
-  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["bilhus","🚗 Bil & Hus"],["ekonomi","💰 Ekonomi"],["listor","📝 Listor"]];
+  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["bilhus","🚗 Bil & Hus"],["ekonomi","💰 Ekonomi"],["listor","📝 Listor"],["ai","🤖 Assistent"]];
 
   return <>
     <style>{`
@@ -2298,6 +2455,7 @@ export default function App(){
                 {activeTab==="bilhus"&&<CarHouseTab T={T} carReminders={carReminders} setCarReminders={setCarReminders} houseItems={houseItems} setHouseItems={setHouseItems}/>}
                 {activeTab==="ekonomi"&&<EkonomiTab T={T} budget={budget} setBudget={setBudget}/>}
                 {activeTab==="listor"&&<ListorTab T={T} bucketList={bucketList} setBucketList={setBucketList} sommarList={sommarList} setSommarList={setSommarList}/>}
+                {activeTab==="ai"&&<FamiljeAssistentTab T={T} tasks={tasks} flowMeds={flowMeds} family={family}/>}
               </div>
             </div>
             {/* RIGHT */}

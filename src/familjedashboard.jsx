@@ -361,15 +361,34 @@ function FlowPanel({T,flowMeds,onToggleMed,guestMode}){
         {meds.length>0&&<span style={{fontSize:9,color:T.textDim,marginRight:3}}>{meds.filter(m=>m.done).length}/{meds.length}</span>}
         <span style={{fontSize:11,color:T.textDim,transform:medOpen?"rotate(0deg)":"rotate(-90deg)",transition:"transform .2s",display:"inline-block",lineHeight:1}}>▾</span>
       </button>
-      {medOpen&&(meds.length>0?meds.map((med,i)=>(
-        <div key={i} onClick={()=>onToggleMed(sel,i)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",borderBottom:i<meds.length-1?`1px solid ${T.border}`:"none",cursor:"pointer",opacity:med.done?0.45:1}}>
-          <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${med.done?T.green:T.borderMid}`,background:med.done?T.greenBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .2s"}}>
-            {med.done&&<span style={{color:T.green,fontSize:9,fontWeight:700}}>✓</span>}
+      {medOpen&&(meds.length>0?meds.map((med,i)=>{
+        const daysLeft=med.antal!=null&&med.dosDag>0?Math.floor(med.antal/med.dosDag):null;
+        const lowStock=med.bestallning!=null&&med.antal!=null&&med.antal<=med.bestallning;
+        const stockColor=lowStock?"#c0392b":daysLeft!=null&&daysLeft<7?"#d68a00":T.textDim;
+        return(
+        <div key={i} style={{borderBottom:i<meds.length-1?`1px solid ${T.border}`:"none"}}>
+          <div onClick={()=>onToggleMed(sel,i)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",cursor:"pointer",opacity:med.done?0.45:1}}>
+            <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${med.done?T.green:T.borderMid}`,background:med.done?T.greenBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .2s"}}>
+              {med.done&&<span style={{color:T.green,fontSize:9,fontWeight:700}}>✓</span>}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:11,color:T.text,fontWeight:600,textDecoration:med.done?"line-through":"none"}}>{med.name}</span>
+                <span style={{fontSize:9,color:T.textDim}}>{med.dose}</span>
+                {med.fassUrl&&<a href={med.fassUrl} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:9,color:"#6B4EA8",textDecoration:"none",marginLeft:2}} title="FASS">🔗</a>}
+              </div>
+              {med.antal!=null&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}>
+                <span style={{fontSize:9,color:stockColor,fontWeight:lowStock?700:400}}>{lowStock?"⚠️ ":""}{med.antal} kvar</span>
+                {daysLeft!=null&&<span style={{fontSize:8,color:stockColor}}>({daysLeft}d)</span>}
+              </div>}
+            </div>
+            <span style={{fontSize:8,padding:"1px 6px",borderRadius:999,background:flow.color+"18",color:flow.color,fontWeight:700,flexShrink:0}}>{med.who}</span>
           </div>
-          <div style={{flex:1}}><span style={{fontSize:11,color:T.text,fontWeight:600,textDecoration:med.done?"line-through":"none"}}>{med.name}</span><span style={{fontSize:9,color:T.textDim,marginLeft:4}}>{med.dose}</span></div>
-          <span style={{fontSize:8,padding:"1px 6px",borderRadius:999,background:flow.color+"18",color:flow.color,fontWeight:700}}>{med.who}</span>
-        </div>
-      )):<div style={{padding:"9px 11px",fontSize:11,color:T.textDim,textAlign:"center"}}>Inga mediciner detta flöde</div>)}
+          {med.doslogg&&med.doslogg.length>0&&<div style={{padding:"2px 11px 6px 37px",display:"flex",gap:4,flexWrap:"wrap"}}>
+            {med.doslogg.slice(-3).map((l,j)=><span key={j} style={{fontSize:8,color:T.textDim,background:T.surface,borderRadius:4,padding:"1px 5px"}}>{new Date(l.ts).toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"})}</span>)}
+          </div>}
+        </div>);
+      }):<div style={{padding:"9px 11px",fontSize:11,color:T.textDim,textAlign:"center"}}>Inga mediciner detta flöde</div>)}
     </div>}
   </div>;
 }
@@ -1244,7 +1263,7 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
   const [schoolPaste,setSchoolPaste]=useState("");
   const [section,setSection]=useState("general"); // general | mediciner | meals | school | sysslor
   const [localMeds,setLocalMeds]=useState(()=>JSON.parse(JSON.stringify(flowMeds)));
-  const [newMed,setNewMed]=useState({flowId:"morning",name:"",dose:"",who:""});
+  const [newMed,setNewMed]=useState({flowId:"morning",name:"",dose:"",who:"",antal:"",dosDag:"1",bestallning:"",fassUrl:""});
   const [localChores,setLocalChores]=useState(()=>[...(choresList||CHORES_LIST)]);
   const [newChore,setNewChore]=useState({title:"",icon:"⭐",category:"Övrigt",points:5});
 
@@ -1456,13 +1475,19 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
             </div>
             <input value={newMed.name} onChange={e=>setNewMed(m=>({...m,name:e.target.value}))} placeholder="Namn" style={{width:"100%",padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",marginBottom:5,boxSizing:"border-box"}}/>
             <div style={{display:"flex",gap:5,marginBottom:5}}>
-              <input value={newMed.dose} onChange={e=>setNewMed(m=>({...m,dose:e.target.value}))} placeholder="Dos" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+              <input value={newMed.dose} onChange={e=>setNewMed(m=>({...m,dose:e.target.value}))} placeholder="Dos (t.ex. 1 tabl.)" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
               <input value={newMed.who} onChange={e=>setNewMed(m=>({...m,who:e.target.value}))} placeholder="Vem" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
             </div>
+            <div style={{display:"flex",gap:5,marginBottom:5}}>
+              <input value={newMed.antal} onChange={e=>setNewMed(m=>({...m,antal:e.target.value}))} placeholder="Antal kvar" type="number" min="0" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+              <input value={newMed.dosDag} onChange={e=>setNewMed(m=>({...m,dosDag:e.target.value}))} placeholder="Dos/dag" type="number" min="1" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+              <input value={newMed.bestallning} onChange={e=>setNewMed(m=>({...m,bestallning:e.target.value}))} placeholder="Beställ vid" type="number" min="0" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+            </div>
+            <input value={newMed.fassUrl} onChange={e=>setNewMed(m=>({...m,fassUrl:e.target.value}))} placeholder="FASS-länk (valfri URL)" style={{width:"100%",padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",marginBottom:5,boxSizing:"border-box"}}/>
             <button onClick={()=>{
               if(!newMed.name.trim())return;
-              setLocalMeds(p=>({...p,[newMed.flowId]:[...(p[newMed.flowId]||[]),{name:newMed.name.trim(),dose:newMed.dose.trim(),who:newMed.who.trim(),done:false}]}));
-              setNewMed(m=>({...m,name:"",dose:"",who:""}));
+              setLocalMeds(p=>({...p,[newMed.flowId]:[...(p[newMed.flowId]||[]),{name:newMed.name.trim(),dose:newMed.dose.trim(),who:newMed.who.trim(),done:false,antal:newMed.antal===''?null:Number(newMed.antal),dosDag:Number(newMed.dosDag)||1,bestallning:newMed.bestallning===''?null:Number(newMed.bestallning),fassUrl:newMed.fassUrl.trim(),doslogg:[]}]}));
+              setNewMed(m=>({...m,name:"",dose:"",who:"",antal:"",dosDag:"1",bestallning:"",fassUrl:""}));
             }} style={{width:"100%",padding:"7px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Lägg till medicin</button>
           </div>
         </>}
@@ -1782,7 +1807,15 @@ export default function App(){
   const [houseItems,setHouseItems]=useLocalStorage("fp_house",[]);
 
   const T=cfg.dark?THEMES.dark:THEMES.light;
-  const toggleMed=(fid,idx)=>setFlowMeds(p=>{const arr=[...p[fid]];arr[idx]={...arr[idx],done:!arr[idx].done};return{...p,[fid]:arr};});
+  const toggleMed=(fid,idx)=>setFlowMeds(p=>{
+    const arr=[...p[fid]];
+    const med=arr[idx];
+    const markingDone=!med.done;
+    arr[idx]={...med,done:markingDone,
+      antal:markingDone&&med.antal!=null?Math.max(0,med.antal-1):med.antal,
+      doslogg:markingDone?[...(med.doslogg||[]),{ts:Date.now()}]:(med.doslogg||[])};
+    return{...p,[fid]:arr};
+  });
   const allMeds=Object.values(flowMeds).flat();
   const medsDone=allMeds.filter(m=>m.done).length;
   const doneTasks=tasks.filter(t=>t.lane==="done").length;

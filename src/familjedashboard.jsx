@@ -1624,6 +1624,139 @@ function GuestToast({guestMode,T}){
   </div>;
 }
 
+/* ═══ BIL & HUS ═════════════════════════════════════════════════ */
+const CAR_TEMPLATES=[
+  {title:"Sommardäck",icon:"🔄",month:4,recur:"yearly",cat:"Bil"},
+  {title:"Vinterdäck",icon:"❄️",month:10,recur:"yearly",cat:"Bil"},
+  {title:"Besiktning",icon:"🔍",month:6,recur:"yearly",cat:"Bil"},
+  {title:"Service",icon:"🔧",month:3,recur:"yearly",cat:"Bil"},
+  {title:"Biltvätt",icon:"🚿",month:5,recur:"yearly",cat:"Bil"},
+];
+const HOUSE_CATS=["Utvändigt","Inomhus","Teknik","Trädgård","Städning"];
+const HOUSE_TEMPLATES=[
+  {title:"Rengöra värmepump",icon:"🌡️",intervalMonths:6,cat:"Teknik"},
+  {title:"Byta batterier brandvarnare",icon:"🔋",intervalMonths:12,cat:"Teknik"},
+  {title:"Rensa hängrännor",icon:"🪣",intervalMonths:6,cat:"Utvändigt"},
+  {title:"Måla träfasad",icon:"🎨",intervalMonths:60,cat:"Utvändigt"},
+  {title:"Kontrollera tak",icon:"🏠",intervalMonths:24,cat:"Utvändigt"},
+  {title:"Rensa avlopp",icon:"🚿",intervalMonths:12,cat:"Inomhus"},
+  {title:"Klippa häck",icon:"✂️",intervalMonths:3,cat:"Trädgård"},
+];
+const MONTH_SV=["Jan","Feb","Mar","Apr","Maj","Jun","Jul","Aug","Sep","Okt","Nov","Dec"];
+
+function CarHouseTab({T,carReminders,setCarReminders,houseItems,setHouseItems}){
+  const [view,setView]=useState("car"); // car | house
+  const [newCar,setNewCar]=useState({title:"",icon:"🚗",month:new Date().getMonth()+1,notes:""});
+  const [newHouse,setNewHouse]=useState({title:"",icon:"🏠",intervalMonths:12,cat:"Inomhus",notes:"",lastDone:""});
+  const today=new Date();
+
+  const addCar=()=>{if(!newCar.title.trim())return;setCarReminders(p=>[...p,{...newCar,id:Date.now()}]);setNewCar({title:"",icon:"🚗",month:today.getMonth()+1,notes:""});};
+  const delCar=id=>setCarReminders(p=>p.filter(r=>r.id!==id));
+  const doneCarNow=id=>setCarReminders(p=>p.map(r=>r.id===id?{...r,lastDone:today.toISOString().slice(0,10)}:r));
+
+  const addHouse=()=>{if(!newHouse.title.trim())return;setHouseItems(p=>[...p,{...newHouse,id:Date.now(),lastDone:""}]);setNewHouse({title:"",icon:"🏠",intervalMonths:12,cat:"Inomhus",notes:"",lastDone:""});};
+  const delHouse=id=>setHouseItems(p=>p.filter(r=>r.id!==id));
+  const doneHouseNow=id=>setHouseItems(p=>p.map(r=>r.id===id?{...r,lastDone:today.toISOString().slice(0,10)}:r));
+
+  const daysUntilMonth=(m)=>{const t=new Date(today.getFullYear(),m-1,1);if(t<today)t.setFullYear(today.getFullYear()+1);return Math.round((t-today)/(1000*60*60*24));};
+  const houseOverdue=(item)=>{if(!item.lastDone)return true;const last=new Date(item.lastDone);const next=new Date(last);next.setMonth(next.getMonth()+item.intervalMonths);return next<=today;};
+  const houseNextDate=(item)=>{if(!item.lastDone)return"Aldrig gjort";const last=new Date(item.lastDone);const next=new Date(last);next.setMonth(next.getMonth()+item.intervalMonths);return next.toLocaleDateString("sv-SE",{year:"numeric",month:"short",day:"numeric"});};
+
+  const sortedCar=[...carReminders].sort((a,b)=>daysUntilMonth(a.month)-daysUntilMonth(b.month));
+  const sortedHouse=[...houseItems].sort((a,b)=>(houseOverdue(a)?-1:1)-(houseOverdue(b)?-1:1));
+
+  return <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
+    {/* Sub-nav */}
+    <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,flexShrink:0,padding:"0 12px"}}>
+      {[["car","🚗 Bil"],["house","🏠 Hus"]].map(([id,label])=>(
+        <button key={id} onClick={()=>setView(id)} style={{padding:"8px 16px",border:"none",borderBottom:`2.5px solid ${view===id?T.amber:"transparent"}`,background:"transparent",color:view===id?T.amber:T.textDim,fontSize:11,fontWeight:view===id?700:400,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>{label}</button>
+      ))}
+    </div>
+
+    <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
+      {/* ── BIL ── */}
+      {view==="car"&&<>
+        {/* Snabbmallar */}
+        <div style={{marginBottom:12}}>
+          <p style={{fontSize:9,fontWeight:700,color:T.textDim,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Snabblägg till</p>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {CAR_TEMPLATES.map(t=><button key={t.title} onClick={()=>setCarReminders(p=>[...p,{...t,id:Date.now()}])} style={{padding:"4px 10px",borderRadius:999,border:`1px solid ${T.border}`,background:T.surface,color:T.textMid,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>{t.icon} {t.title}</button>)}
+          </div>
+        </div>
+        {/* Ny påminnelse */}
+        <div style={{background:T.card,borderRadius:12,border:`1.5px solid ${T.amber}`,padding:"10px 12px",marginBottom:12}}>
+          <p style={{fontSize:10,fontWeight:700,color:T.amber,marginBottom:8}}>➕ Ny bilpåminnelse</p>
+          <div style={{display:"flex",gap:5,marginBottom:6}}>
+            <input value={newCar.icon} onChange={e=>setNewCar(p=>({...p,icon:e.target.value}))} style={{width:36,padding:"5px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:16,textAlign:"center",fontFamily:"inherit",outline:"none"}}/>
+            <input value={newCar.title} onChange={e=>setNewCar(p=>({...p,title:e.target.value}))} placeholder="Vad ska göras?" style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+            <select value={newCar.month} onChange={e=>setNewCar(p=>({...p,month:Number(e.target.value)}))} style={{padding:"5px 7px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit"}}>
+              {MONTH_SV.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}
+            </select>
+          </div>
+          <button onClick={addCar} style={{width:"100%",padding:"6px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Lägg till</button>
+        </div>
+        {sortedCar.length===0&&<div style={{textAlign:"center",padding:20,color:T.textDim,fontSize:11}}>Inga bilpåminnelser. Lägg till ovan.</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {sortedCar.map(r=>{const days=daysUntilMonth(r.month);const soon=days<30;const veryClose=days<7;return <div key={r.id} style={{background:T.card,borderRadius:10,border:`1.5px solid ${veryClose?T.red:soon?T.amber:T.border}`,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:22}}>{r.icon}</span>
+            <div style={{flex:1}}>
+              <p style={{fontSize:12,fontWeight:700,color:T.text}}>{r.title}</p>
+              <p style={{fontSize:10,color:soon?T.amber:T.textDim}}>{MONTH_SV[r.month-1]} — om {days} dagar</p>
+              {r.lastDone&&<p style={{fontSize:9,color:T.textDim}}>Senast: {r.lastDone}</p>}
+            </div>
+            <button onClick={()=>doneCarNow(r.id)} style={{padding:"4px 9px",borderRadius:7,border:`1px solid ${T.green}`,background:T.greenBg,color:T.green,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ Klar</button>
+            <button onClick={()=>delCar(r.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:12}}>🗑</button>
+          </div>;})}
+        </div>
+      </>}
+
+      {/* ── HUS ── */}
+      {view==="house"&&<>
+        {/* Snabbmallar */}
+        <div style={{marginBottom:12}}>
+          <p style={{fontSize:9,fontWeight:700,color:T.textDim,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Snabblägg till</p>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {HOUSE_TEMPLATES.map(t=><button key={t.title} onClick={()=>setHouseItems(p=>[...p,{...t,id:Date.now(),lastDone:""}])} style={{padding:"4px 10px",borderRadius:999,border:`1px solid ${T.border}`,background:T.surface,color:T.textMid,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>{t.icon} {t.title}</button>)}
+          </div>
+        </div>
+        {/* Ny post */}
+        <div style={{background:T.card,borderRadius:12,border:`1.5px solid ${T.amber}`,padding:"10px 12px",marginBottom:12}}>
+          <p style={{fontSize:10,fontWeight:700,color:T.amber,marginBottom:8}}>➕ Ny underhållspost</p>
+          <div style={{display:"flex",gap:5,marginBottom:6}}>
+            <input value={newHouse.icon} onChange={e=>setNewHouse(p=>({...p,icon:e.target.value}))} style={{width:36,padding:"5px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:16,textAlign:"center",fontFamily:"inherit",outline:"none"}}/>
+            <input value={newHouse.title} onChange={e=>setNewHouse(p=>({...p,title:e.target.value}))} placeholder="Vad ska göras?" style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+          </div>
+          <div style={{display:"flex",gap:5,marginBottom:6}}>
+            <select value={newHouse.cat} onChange={e=>setNewHouse(p=>({...p,cat:e.target.value}))} style={{flex:1,padding:"5px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:10,fontFamily:"inherit"}}>
+              {HOUSE_CATS.map(c=><option key={c}>{c}</option>)}
+            </select>
+            <select value={newHouse.intervalMonths} onChange={e=>setNewHouse(p=>({...p,intervalMonths:Number(e.target.value)}))} style={{flex:1,padding:"5px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:10,fontFamily:"inherit"}}>
+              {[[1,"Varje månad"],[3,"Var 3:e månad"],[6,"Var 6:e månad"],[12,"Varje år"],[24,"Vartannat år"],[60,"Vart 5:e år"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <button onClick={addHouse} style={{width:"100%",padding:"6px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Lägg till</button>
+        </div>
+        {sortedHouse.length===0&&<div style={{textAlign:"center",padding:20,color:T.textDim,fontSize:11}}>Inga underhållsposter. Lägg till ovan.</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {sortedHouse.map(r=>{const overdue=houseOverdue(r);const next=houseNextDate(r);return <div key={r.id} style={{background:T.card,borderRadius:10,border:`1.5px solid ${overdue?T.red:T.border}`,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:22}}>{r.icon}</span>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:2}}>
+                <p style={{fontSize:12,fontWeight:700,color:T.text}}>{r.title}</p>
+                <span style={{fontSize:8,padding:"1px 5px",borderRadius:999,background:overdue?T.redBg:T.greenBg,color:overdue?T.red:T.green,fontWeight:700}}>{r.cat}</span>
+              </div>
+              <p style={{fontSize:10,color:overdue?T.red:T.textDim}}>{overdue?"⚠️ Förfallet!":""} Nästa: {next}</p>
+              {r.lastDone&&<p style={{fontSize:9,color:T.textDim}}>Senast: {r.lastDone}</p>}
+            </div>
+            <button onClick={()=>doneHouseNow(r.id)} style={{padding:"4px 9px",borderRadius:7,border:`1px solid ${T.green}`,background:T.greenBg,color:T.green,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ Klar</button>
+            <button onClick={()=>delHouse(r.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:12}}>🗑</button>
+          </div>;})}
+        </div>
+      </>}
+    </div>
+  </div>;
+}
+
 /* ═══ MAIN APP ══════════════════════════════════════════════════ */
 export default function App(){
   const now=useClock();
@@ -1645,6 +1778,8 @@ export default function App(){
   const [choresList,setChoresList]=useLocalStorage("fp_chores_list",null); // null = använd CHORES_LIST från constants
   const [templates,setTemplates]=useLocalStorage("fp_templates",DEFAULT_TEMPLATES);
   const [epics,setEpics]=useLocalStorage("fp_epics",[]);
+  const [carReminders,setCarReminders]=useLocalStorage("fp_car",[]);
+  const [houseItems,setHouseItems]=useLocalStorage("fp_house",[]);
 
   const T=cfg.dark?THEMES.dark:THEMES.light;
   const toggleMed=(fid,idx)=>setFlowMeds(p=>{const arr=[...p[fid]];arr[idx]={...arr[idx],done:!arr[idx].done};return{...p,[fid]:arr};});
@@ -1654,8 +1789,7 @@ export default function App(){
   const PHOTO="https://images.unsplash.com/photo-1511895426328-dc8714191011?w=1600&q=80";
 
   // 🔧 Smarta hem-fliken är tillfälligt dold — ta bort kommentaren för att aktivera igen:
-  // const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["smarthome","🏠 Smarta hem"]];
-  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"]];
+  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["bilhus","🚗 Bil & Hus"]];
 
   return <>
     <style>{`
@@ -1757,7 +1891,7 @@ export default function App(){
                 {activeTab==="kanban"&&<KanbanBoard T={T} tasks={tasks} setTasks={setTasks} members={family.members} guestMode={cfg.guestMode} epics={epics}/>}
                 {activeTab==="planning"&&<PlanningTab T={T} backlog={backlog} setBacklog={setBacklog} tasks={tasks} setTasks={setTasks} members={family.members} templates={templates} setTemplates={setTemplates} epics={epics} setEpics={setEpics}/>}
                 {activeTab==="sysslor"&&<KidsPointsTab T={T} members={family.members} choresDone={choresDone} setChoresDone={setChoresDone} choresList={choresList||CHORES_LIST}/>}
-                {activeTab==="smarthome"&&<div style={{padding:"20px",color:T.textMid,fontSize:13,textAlign:"center",paddingTop:40}}>🏠 Smarta hem<br/><span style={{fontSize:11,color:T.textDim}}>Roborock, Spotify, Hue & Nest</span></div>}
+                {activeTab==="bilhus"&&<CarHouseTab T={T} carReminders={carReminders} setCarReminders={setCarReminders} houseItems={houseItems} setHouseItems={setHouseItems}/>}
               </div>
             </div>
             {/* RIGHT */}

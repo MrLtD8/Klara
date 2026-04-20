@@ -102,28 +102,40 @@ function Toggle({value,onChange,T,small}){
 }
 
 /* ═══ CALENDAR VIEW ═════════════════════════════════════════════ */
-function StickerCard({event,T}){
+function StickerCard({event,T,onDelete,onDragStart}){
   const et=EVENT_TYPES[event.type]||EVENT_TYPES.note;
-  return <div style={{borderRadius:8,border:`1.5px solid ${et.border}`,background:et.bg,padding:"4px 7px",marginBottom:4,boxShadow:"0 1px 5px rgba(0,0,0,0.07)"}}>
+  return <div
+    draggable
+    onDragStart={e=>{e.dataTransfer.setData("eventId",event.id);if(onDragStart)onDragStart();}}
+    style={{borderRadius:8,border:`1.5px solid ${et.border}`,background:et.bg,padding:"4px 7px",marginBottom:4,boxShadow:"0 1px 5px rgba(0,0,0,0.07)",cursor:"grab",userSelect:"none",position:"relative"}}
+  >
     <div style={{display:"flex",alignItems:"flex-start",gap:4}}>
       <span style={{fontSize:12,flexShrink:0,lineHeight:1.2}}>{et.icon}</span>
       <div style={{flex:1,minWidth:0}}>
-        <p style={{fontSize:9,fontWeight:700,color:"#1C1810",lineHeight:1.3,fontFamily:"'DM Sans',sans-serif"}}>{event.title}</p>
+        <p style={{fontSize:9,fontWeight:700,color:"#1C1810",lineHeight:1.3,fontFamily:"'DM Sans',sans-serif"}}>{event.title}{event.recur&&event.recur!=="none"&&<span style={{marginLeft:3,opacity:.6}}>🔁</span>}</p>
         {event.who&&<p style={{fontSize:8,color:"#9A8E7C",marginTop:1,fontFamily:"'DM Sans',sans-serif"}}>{event.who}</p>}
       </div>
+      {onDelete&&<button onClick={e=>{e.stopPropagation();onDelete(event.id);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:9,color:"#999",padding:"0 2px",lineHeight:1,flexShrink:0}}>✕</button>}
     </div>
   </div>;
 }
 
-function DayCol({date,isToday,events,schoolLunch,dinner,T,onAddEvent,onEditMeal}){
+function DayCol({date,isToday,events,schoolLunch,dinner,T,onAddEvent,onEditMeal,onDropEvent,onDeleteEvent}){
   const dayName=WEEKDAYS_SV[(date.getDay()+6)%7];
   const dayNum=date.getDate();
   const isWeekend=date.getDay()===0||date.getDay()===6;
   const isHoliday=events.some(e=>e.type==="holiday");
+  const [dragOver,setDragOver]=useState(false);
 
-  return <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,
-    background:isToday?T.amberBg:isWeekend?T.bg:T.calPaper,
-    borderRight:`1px solid ${T.calBorder}`,position:"relative",overflow:"hidden"}}>
+  return <div
+    onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+    onDragLeave={()=>setDragOver(false)}
+    onDrop={e=>{e.preventDefault();setDragOver(false);const id=e.dataTransfer.getData("eventId");if(id&&onDropEvent)onDropEvent(id,fmtDate(date));}}
+    style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,
+      background:dragOver?T.amberBg+"55":isToday?T.amberBg:isWeekend?T.bg:T.calPaper,
+      borderRight:`1px solid ${T.calBorder}`,position:"relative",overflow:"hidden",
+      transition:"background .15s"}}
+  >
     {isToday&&<div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:T.amber}}/>}
 
     {/* Day header */}
@@ -137,7 +149,7 @@ function DayCol({date,isToday,events,schoolLunch,dinner,T,onAddEvent,onEditMeal}
 
     {/* Events */}
     <div style={{flex:1,padding:"5px 6px 4px",overflowY:"auto",minHeight:50}}>
-      {events.filter(e=>e.type!=="holiday").map((ev,i)=><StickerCard key={i} event={ev} T={T}/>)}
+      {events.filter(e=>e.type!=="holiday").map((ev)=><StickerCard key={ev.id} event={ev} T={T} onDelete={onDeleteEvent}/>)}
       <button onClick={()=>onAddEvent(fmtDate(date))} style={{width:"100%",padding:"3px",borderRadius:5,border:`1px dashed ${T.calBorder}`,background:"transparent",color:T.textDim,fontSize:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:.7}}>+ händelse</button>
     </div>
 
@@ -164,7 +176,7 @@ function CalendarView({T,familyMeals,schoolMenu}){
   const [addEvDate,setAddEvDate]=useState(null);
   const [editMealDate,setEditMealDate]=useState(null);
   const [editMealForm,setEditMealForm]=useState({dinner:"",lunch:""});
-  const [addEvForm,setAddEvForm]=useState({type:"note",title:"",who:""});
+  const [addEvForm,setAddEvForm]=useState({type:"note",title:"",who:"",recur:"none"});
 
   const wk=getISOWeek(weekStart);
   const month=MONTHS_SV[weekStart.getMonth()];
@@ -185,9 +197,22 @@ function CalendarView({T,familyMeals,schoolMenu}){
   };
   const saveEvent=()=>{
     if(!addEvForm.title.trim())return;
-    setCalEvents(p=>[...p,{...addEvForm,date:addEvDate}]);
+    setCalEvents(p=>[...p,{...addEvForm,date:addEvDate,id:Date.now().toString()}]);
     setAddEvDate(null);
-    setAddEvForm({type:"note",title:"",who:""});
+    setAddEvForm({type:"note",title:"",who:"",recur:"none"});
+  };
+  const deleteEvent=(id)=>setCalEvents(p=>p.filter(e=>e.id!==id));
+  const dropEvent=(id,newDate)=>setCalEvents(p=>p.map(e=>e.id===id?{...e,date:newDate}:e));
+  const getEvWithRecur=(dk)=>{
+    const direct=calEvents.filter(e=>e.date===dk);
+    const d=new Date(dk);
+    const recurring=calEvents.filter(e=>{
+      if(e.date===dk)return false;
+      if(e.recur==="weekly"){const s=new Date(e.date);return s.getDay()===d.getDay();}
+      if(e.recur==="yearly"){const s=new Date(e.date);return s.getMonth()===d.getMonth()&&s.getDate()===d.getDate();}
+      return false;
+    });
+    return [...direct,...recurring];
   };
 
   return <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
@@ -217,7 +242,7 @@ function CalendarView({T,familyMeals,schoolMenu}){
         const isToday=date.getTime()===today.getTime();
         const sl=calMeals[dk]?.lunch||getSchoolLunch(date,schoolMenu)||"";
         const dinner=calMeals[dk]?.dinner||getFamilyDinner(date,familyMeals,calMeals)||"";
-        return <DayCol key={dk} date={date} isToday={isToday} events={getEv(dk)} schoolLunch={sl} dinner={dinner} T={T} onAddEvent={setAddEvDate} onEditMeal={openMealEdit}/>;
+        return <DayCol key={dk} date={date} isToday={isToday} events={getEvWithRecur(dk)} schoolLunch={sl} dinner={dinner} T={T} onAddEvent={setAddEvDate} onEditMeal={openMealEdit} onDropEvent={dropEvent} onDeleteEvent={deleteEvent}/>;
       })}
     </div>
 
@@ -269,21 +294,26 @@ function CalendarView({T,familyMeals,schoolMenu}){
 
     {/* Add event overlay */}
     {addEvDate&&<div style={{position:"absolute",inset:0,zIndex:50,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(0,0,0,0.3)",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget)setAddEvDate(null);}}>
-      <div style={{width:"100%",maxWidth:420,background:T.card,borderRadius:"16px 16px 0 0",padding:"16px 18px 20px",boxShadow:"0 -8px 30px rgba(0,0,0,0.18)"}}>
+      <div style={{width:"100%",maxWidth:460,background:T.card,borderRadius:"16px 16px 0 0",padding:"16px 18px 20px",boxShadow:"0 -8px 30px rgba(0,0,0,0.18)",maxHeight:"80vh",overflowY:"auto"}}>
         <div style={{width:32,height:4,borderRadius:2,background:T.border,margin:"0 auto 12px"}}/>
-        <h3 style={{fontFamily:"'Fraunces',serif",fontSize:16,fontWeight:700,color:T.text,marginBottom:10}}>Ny händelse</h3>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:10}}>
+        <h3 style={{fontFamily:"'Fraunces',serif",fontSize:16,fontWeight:700,color:T.text,marginBottom:10}}>Ny aktivitet</h3>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:4,marginBottom:10}}>
           {Object.entries(EVENT_TYPES).map(([k,v])=>(
-            <button key={k} onClick={()=>setAddEvForm(f=>({...f,type:k}))} style={{padding:"6px 4px",borderRadius:8,border:`2px solid ${addEvForm.type===k?v.border:T.border}`,background:addEvForm.type===k?v.bg:T.bg,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <span style={{fontSize:18}}>{v.icon}</span>
-              <span style={{fontSize:8,fontFamily:"'DM Sans',sans-serif",color:T.textDim}}>{v.label}</span>
+            <button key={k} onClick={()=>setAddEvForm(f=>({...f,type:k,title:f.title||v.label}))} style={{padding:"6px 3px",borderRadius:8,border:`2px solid ${addEvForm.type===k?v.border:T.border}`,background:addEvForm.type===k?v.bg:T.bg,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <span style={{fontSize:17}}>{v.icon}</span>
+              <span style={{fontSize:7,fontFamily:"'DM Sans',sans-serif",color:addEvForm.type===k?"#333":T.textDim,fontWeight:addEvForm.type===k?700:400}}>{v.label}</span>
             </button>
           ))}
         </div>
         <input value={addEvForm.title} onChange={e=>setAddEvForm(f=>({...f,title:e.target.value}))} placeholder="Vad händer?"
           style={{width:"100%",padding:"8px 11px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",marginBottom:6,boxSizing:"border-box"}}/>
         <input value={addEvForm.who} onChange={e=>setAddEvForm(f=>({...f,who:e.target.value}))} placeholder="Vem? (valfri)"
-          style={{width:"100%",padding:"8px 11px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",marginBottom:10,boxSizing:"border-box"}}/>
+          style={{width:"100%",padding:"8px 11px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}/>
+        <div style={{display:"flex",gap:5,marginBottom:12}}>
+          {[["none","Engångs"],["weekly","🔁 Varje vecka"],["yearly","🗓️ Varje år"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setAddEvForm(f=>({...f,recur:v}))} style={{flex:1,padding:"5px 4px",borderRadius:7,border:`1.5px solid ${addEvForm.recur===v?T.amber:T.border}`,background:addEvForm.recur===v?T.amberBg:"transparent",color:addEvForm.recur===v?T.amber:T.textMid,fontSize:10,fontWeight:addEvForm.recur===v?700:400,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{l}</button>
+          ))}
+        </div>
         <div style={{display:"flex",gap:7}}>
           <button onClick={()=>setAddEvDate(null)} style={{flex:1,padding:"9px",borderRadius:9,border:`1px solid ${T.border}`,background:"transparent",color:T.textMid,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>Avbryt</button>
           <button onClick={saveEvent} style={{flex:2,padding:"9px",borderRadius:9,border:"none",background:T.amber,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Lägg till</button>
@@ -393,16 +423,16 @@ function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,set
           {task.tags.slice(0,2).map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
         </div>
       </div>
-      <button onClick={()=>setExp(e=>!e)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:T.textDim,padding:"2px",lineHeight:1,transform:exp?"rotate(0)":"rotate(-90deg)",transition:"transform .2s",flexShrink:0}}>▾</button>
+      <button onClick={()=>setExp(e=>!e)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.textDim,padding:"6px 8px",lineHeight:1,transform:exp?"rotate(0)":"rotate(-90deg)",transition:"transform .2s",flexShrink:0}}>▾</button>
     </div>
     {exp&&<div style={{padding:"0 9px 8px",borderTop:`1px solid ${T.border}`,paddingTop:7,display:"flex",flexDirection:"column",gap:5}}>
       {task.desc&&<p style={{fontSize:10,color:T.textMid,lineHeight:1.4}}>{task.desc}</p>}
       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-        {LANES.filter(l=>l.id!==task.lane).map(l=><button key={l.id} onClick={()=>moveTask(task.id,l.id)} style={{padding:"2px 8px",borderRadius:5,border:`1px solid ${l.color}44`,background:l.bg,color:l.color,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>→ {l.label}</button>)}
-        <button onClick={()=>moveUp(task.id)} disabled={idx===0} style={{padding:"2px 7px",borderRadius:5,border:`1px solid ${T.border}`,background:"transparent",color:idx===0?T.textDim:T.text,fontSize:9,cursor:idx===0?"default":"pointer",fontFamily:"inherit"}}>↑</button>
-        <button onClick={()=>moveDown(task.id)} disabled={idx===lt.length-1} style={{padding:"2px 7px",borderRadius:5,border:`1px solid ${T.border}`,background:"transparent",color:idx===lt.length-1?T.textDim:T.text,fontSize:9,cursor:idx===lt.length-1?"default":"pointer",fontFamily:"inherit"}}>↓</button>
-        <button onClick={()=>setEditing(task)} style={{padding:"2px 7px",borderRadius:5,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
-        <button onClick={()=>delTask(task.id)} style={{padding:"2px 7px",borderRadius:5,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
+        {LANES.filter(l=>l.id!==task.lane).map(l=><button key={l.id} onClick={()=>moveTask(task.id,l.id)} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${l.color}44`,background:l.bg,color:l.color,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>→ {l.label}</button>)}
+        <button onClick={()=>moveUp(task.id)} disabled={idx===0} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:idx===0?T.textDim:T.text,fontSize:11,cursor:idx===0?"default":"pointer",fontFamily:"inherit"}}>↑</button>
+        <button onClick={()=>moveDown(task.id)} disabled={idx===lt.length-1} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:idx===lt.length-1?T.textDim:T.text,fontSize:11,cursor:idx===lt.length-1?"default":"pointer",fontFamily:"inherit"}}>↓</button>
+        <button onClick={()=>setEditing(task)} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
+        <button onClick={()=>delTask(task.id)} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
       </div>
     </div>}
   </div>;
@@ -1336,10 +1366,10 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
             <div style={{display:"flex",gap:4,marginBottom:7,flexWrap:"wrap"}}>
               {FLOWS.map(f=><button key={f.id} onClick={()=>setNewMed(m=>({...m,flowId:f.id}))} style={{padding:"3px 8px",borderRadius:6,border:`1.5px solid ${newMed.flowId===f.id?f.color:T.border}`,background:newMed.flowId===f.id?f.color+"18":"transparent",color:newMed.flowId===f.id?f.color:T.textDim,fontSize:9,fontWeight:newMed.flowId===f.id?700:400,cursor:"pointer",fontFamily:"inherit"}}>{f.icon} {f.label}</button>)}
             </div>
+            <input value={newMed.name} onChange={e=>setNewMed(m=>({...m,name:e.target.value}))} placeholder="Namn" style={{width:"100%",padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",marginBottom:5,boxSizing:"border-box"}}/>
             <div style={{display:"flex",gap:5,marginBottom:5}}>
-              <input value={newMed.name} onChange={e=>setNewMed(m=>({...m,name:e.target.value}))} placeholder="Namn" style={{flex:2,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
-              <input value={newMed.dose} onChange={e=>setNewMed(m=>({...m,dose:e.target.value}))} placeholder="Dos" style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
-              <input value={newMed.who} onChange={e=>setNewMed(m=>({...m,who:e.target.value}))} placeholder="Vem" style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+              <input value={newMed.dose} onChange={e=>setNewMed(m=>({...m,dose:e.target.value}))} placeholder="Dos" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+              <input value={newMed.who} onChange={e=>setNewMed(m=>({...m,who:e.target.value}))} placeholder="Vem" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
             </div>
             <button onClick={()=>{
               if(!newMed.name.trim())return;

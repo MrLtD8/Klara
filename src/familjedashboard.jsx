@@ -55,6 +55,25 @@ const CAL_EVENTS_DEMO=[
   {time:"17:00",title:"Simning",who:"Max",color:"#3A7A52"},
   {time:"18:30",title:"Middag hemma",who:"Alla",color:"#B8722A"},
 ];
+
+// Standardmallar — återanvändbara grupper av uppgifter
+const DEFAULT_TEMPLATES=[
+  {id:1,name:"Veckostäd",icon:"🧹",tasks:[
+    {title:"Starta robotdamsugare uppe",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Starta robotdamsugare nere",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Toalett uppe",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Toalett nere",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Damtorka",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Tömma papperskorgar",prio:"low",tags:["Hem"],mids:[]},
+  ]},
+  {id:2,name:"Storstäd",icon:"🏠",tasks:[
+    {title:"Dammsuga hela huset",prio:"high",tags:["Hem"],mids:[]},
+    {title:"Moppa golv",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Rengöra ugn",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Byta lakan",prio:"medium",tags:["Hem"],mids:[]},
+    {title:"Putsa fönster",prio:"low",tags:["Hem"],mids:[]},
+  ]},
+];
 // Get school lunch for a given date from the repeating weekly menu
 function getSchoolLunch(date, schoolMenu){
   const dayJS=date.getDay(); // 0=Sun, 1=Mon...
@@ -83,28 +102,40 @@ function Toggle({value,onChange,T,small}){
 }
 
 /* ═══ CALENDAR VIEW ═════════════════════════════════════════════ */
-function StickerCard({event,T}){
+function StickerCard({event,T,onDelete,onDragStart}){
   const et=EVENT_TYPES[event.type]||EVENT_TYPES.note;
-  return <div style={{borderRadius:8,border:`1.5px solid ${et.border}`,background:et.bg,padding:"4px 7px",marginBottom:4,boxShadow:"0 1px 5px rgba(0,0,0,0.07)"}}>
+  return <div
+    draggable
+    onDragStart={e=>{e.dataTransfer.setData("eventId",event.id);if(onDragStart)onDragStart();}}
+    style={{borderRadius:8,border:`1.5px solid ${et.border}`,background:et.bg,padding:"4px 7px",marginBottom:4,boxShadow:"0 1px 5px rgba(0,0,0,0.07)",cursor:"grab",userSelect:"none",position:"relative"}}
+  >
     <div style={{display:"flex",alignItems:"flex-start",gap:4}}>
       <span style={{fontSize:12,flexShrink:0,lineHeight:1.2}}>{et.icon}</span>
       <div style={{flex:1,minWidth:0}}>
-        <p style={{fontSize:9,fontWeight:700,color:"#1C1810",lineHeight:1.3,fontFamily:"'DM Sans',sans-serif"}}>{event.title}</p>
+        <p style={{fontSize:9,fontWeight:700,color:"#1C1810",lineHeight:1.3,fontFamily:"'DM Sans',sans-serif"}}>{event.title}{event.recur&&event.recur!=="none"&&<span style={{marginLeft:3,opacity:.6}}>🔁</span>}</p>
         {event.who&&<p style={{fontSize:8,color:"#9A8E7C",marginTop:1,fontFamily:"'DM Sans',sans-serif"}}>{event.who}</p>}
       </div>
+      {onDelete&&<button onClick={e=>{e.stopPropagation();onDelete(event.id);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:9,color:"#999",padding:"0 2px",lineHeight:1,flexShrink:0}}>✕</button>}
     </div>
   </div>;
 }
 
-function DayCol({date,isToday,events,schoolLunch,dinner,T,onAddEvent,onEditMeal}){
+function DayCol({date,isToday,events,schoolLunch,dinner,T,onAddEvent,onEditMeal,onDropEvent,onDeleteEvent}){
   const dayName=WEEKDAYS_SV[(date.getDay()+6)%7];
   const dayNum=date.getDate();
   const isWeekend=date.getDay()===0||date.getDay()===6;
   const isHoliday=events.some(e=>e.type==="holiday");
+  const [dragOver,setDragOver]=useState(false);
 
-  return <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,
-    background:isToday?T.amberBg:isWeekend?T.bg:T.calPaper,
-    borderRight:`1px solid ${T.calBorder}`,position:"relative",overflow:"hidden"}}>
+  return <div
+    onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+    onDragLeave={()=>setDragOver(false)}
+    onDrop={e=>{e.preventDefault();setDragOver(false);const id=e.dataTransfer.getData("eventId");if(id&&onDropEvent)onDropEvent(id,fmtDate(date));}}
+    style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,
+      background:dragOver?T.amberBg+"55":isToday?T.amberBg:isWeekend?T.bg:T.calPaper,
+      borderRight:`1px solid ${T.calBorder}`,position:"relative",overflow:"hidden",
+      transition:"background .15s"}}
+  >
     {isToday&&<div style={{position:"absolute",top:0,left:0,right:0,height:2.5,background:T.amber}}/>}
 
     {/* Day header */}
@@ -118,7 +149,7 @@ function DayCol({date,isToday,events,schoolLunch,dinner,T,onAddEvent,onEditMeal}
 
     {/* Events */}
     <div style={{flex:1,padding:"5px 6px 4px",overflowY:"auto",minHeight:50}}>
-      {events.filter(e=>e.type!=="holiday").map((ev,i)=><StickerCard key={i} event={ev} T={T}/>)}
+      {events.filter(e=>e.type!=="holiday").map((ev)=><StickerCard key={ev.id} event={ev} T={T} onDelete={onDeleteEvent}/>)}
       <button onClick={()=>onAddEvent(fmtDate(date))} style={{width:"100%",padding:"3px",borderRadius:5,border:`1px dashed ${T.calBorder}`,background:"transparent",color:T.textDim,fontSize:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:.7}}>+ händelse</button>
     </div>
 
@@ -145,7 +176,7 @@ function CalendarView({T,familyMeals,schoolMenu}){
   const [addEvDate,setAddEvDate]=useState(null);
   const [editMealDate,setEditMealDate]=useState(null);
   const [editMealForm,setEditMealForm]=useState({dinner:"",lunch:""});
-  const [addEvForm,setAddEvForm]=useState({type:"note",title:"",who:""});
+  const [addEvForm,setAddEvForm]=useState({type:"note",title:"",who:"",recur:"none"});
 
   const wk=getISOWeek(weekStart);
   const month=MONTHS_SV[weekStart.getMonth()];
@@ -166,9 +197,22 @@ function CalendarView({T,familyMeals,schoolMenu}){
   };
   const saveEvent=()=>{
     if(!addEvForm.title.trim())return;
-    setCalEvents(p=>[...p,{...addEvForm,date:addEvDate}]);
+    setCalEvents(p=>[...p,{...addEvForm,date:addEvDate,id:Date.now().toString()}]);
     setAddEvDate(null);
-    setAddEvForm({type:"note",title:"",who:""});
+    setAddEvForm({type:"note",title:"",who:"",recur:"none"});
+  };
+  const deleteEvent=(id)=>setCalEvents(p=>p.filter(e=>e.id!==id));
+  const dropEvent=(id,newDate)=>setCalEvents(p=>p.map(e=>e.id===id?{...e,date:newDate}:e));
+  const getEvWithRecur=(dk)=>{
+    const direct=calEvents.filter(e=>e.date===dk);
+    const d=new Date(dk);
+    const recurring=calEvents.filter(e=>{
+      if(e.date===dk)return false;
+      if(e.recur==="weekly"){const s=new Date(e.date);return s.getDay()===d.getDay();}
+      if(e.recur==="yearly"){const s=new Date(e.date);return s.getMonth()===d.getMonth()&&s.getDate()===d.getDate();}
+      return false;
+    });
+    return [...direct,...recurring];
   };
 
   return <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
@@ -198,7 +242,7 @@ function CalendarView({T,familyMeals,schoolMenu}){
         const isToday=date.getTime()===today.getTime();
         const sl=calMeals[dk]?.lunch||getSchoolLunch(date,schoolMenu)||"";
         const dinner=calMeals[dk]?.dinner||getFamilyDinner(date,familyMeals,calMeals)||"";
-        return <DayCol key={dk} date={date} isToday={isToday} events={getEv(dk)} schoolLunch={sl} dinner={dinner} T={T} onAddEvent={setAddEvDate} onEditMeal={openMealEdit}/>;
+        return <DayCol key={dk} date={date} isToday={isToday} events={getEvWithRecur(dk)} schoolLunch={sl} dinner={dinner} T={T} onAddEvent={setAddEvDate} onEditMeal={openMealEdit} onDropEvent={dropEvent} onDeleteEvent={deleteEvent}/>;
       })}
     </div>
 
@@ -250,21 +294,26 @@ function CalendarView({T,familyMeals,schoolMenu}){
 
     {/* Add event overlay */}
     {addEvDate&&<div style={{position:"absolute",inset:0,zIndex:50,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(0,0,0,0.3)",backdropFilter:"blur(4px)"}} onClick={e=>{if(e.target===e.currentTarget)setAddEvDate(null);}}>
-      <div style={{width:"100%",maxWidth:420,background:T.card,borderRadius:"16px 16px 0 0",padding:"16px 18px 20px",boxShadow:"0 -8px 30px rgba(0,0,0,0.18)"}}>
+      <div style={{width:"100%",maxWidth:460,background:T.card,borderRadius:"16px 16px 0 0",padding:"16px 18px 20px",boxShadow:"0 -8px 30px rgba(0,0,0,0.18)",maxHeight:"80vh",overflowY:"auto"}}>
         <div style={{width:32,height:4,borderRadius:2,background:T.border,margin:"0 auto 12px"}}/>
-        <h3 style={{fontFamily:"'Fraunces',serif",fontSize:16,fontWeight:700,color:T.text,marginBottom:10}}>Ny händelse</h3>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:10}}>
+        <h3 style={{fontFamily:"'Fraunces',serif",fontSize:16,fontWeight:700,color:T.text,marginBottom:10}}>Ny aktivitet</h3>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:4,marginBottom:10}}>
           {Object.entries(EVENT_TYPES).map(([k,v])=>(
-            <button key={k} onClick={()=>setAddEvForm(f=>({...f,type:k}))} style={{padding:"6px 4px",borderRadius:8,border:`2px solid ${addEvForm.type===k?v.border:T.border}`,background:addEvForm.type===k?v.bg:T.bg,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <span style={{fontSize:18}}>{v.icon}</span>
-              <span style={{fontSize:8,fontFamily:"'DM Sans',sans-serif",color:T.textDim}}>{v.label}</span>
+            <button key={k} onClick={()=>setAddEvForm(f=>({...f,type:k,title:f.title||v.label}))} style={{padding:"6px 3px",borderRadius:8,border:`2px solid ${addEvForm.type===k?v.border:T.border}`,background:addEvForm.type===k?v.bg:T.bg,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <span style={{fontSize:17}}>{v.icon}</span>
+              <span style={{fontSize:7,fontFamily:"'DM Sans',sans-serif",color:addEvForm.type===k?"#333":T.textDim,fontWeight:addEvForm.type===k?700:400}}>{v.label}</span>
             </button>
           ))}
         </div>
         <input value={addEvForm.title} onChange={e=>setAddEvForm(f=>({...f,title:e.target.value}))} placeholder="Vad händer?"
           style={{width:"100%",padding:"8px 11px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",marginBottom:6,boxSizing:"border-box"}}/>
         <input value={addEvForm.who} onChange={e=>setAddEvForm(f=>({...f,who:e.target.value}))} placeholder="Vem? (valfri)"
-          style={{width:"100%",padding:"8px 11px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",marginBottom:10,boxSizing:"border-box"}}/>
+          style={{width:"100%",padding:"8px 11px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}/>
+        <div style={{display:"flex",gap:5,marginBottom:12}}>
+          {[["none","Engångs"],["weekly","🔁 Varje vecka"],["yearly","🗓️ Varje år"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setAddEvForm(f=>({...f,recur:v}))} style={{flex:1,padding:"5px 4px",borderRadius:7,border:`1.5px solid ${addEvForm.recur===v?T.amber:T.border}`,background:addEvForm.recur===v?T.amberBg:"transparent",color:addEvForm.recur===v?T.amber:T.textMid,fontSize:10,fontWeight:addEvForm.recur===v?700:400,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{l}</button>
+          ))}
+        </div>
         <div style={{display:"flex",gap:7}}>
           <button onClick={()=>setAddEvDate(null)} style={{flex:1,padding:"9px",borderRadius:9,border:`1px solid ${T.border}`,background:"transparent",color:T.textMid,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>Avbryt</button>
           <button onClick={saveEvent} style={{flex:2,padding:"9px",borderRadius:9,border:"none",background:T.amber,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Lägg till</button>
@@ -312,40 +361,68 @@ function FlowPanel({T,flowMeds,onToggleMed,guestMode}){
         {meds.length>0&&<span style={{fontSize:9,color:T.textDim,marginRight:3}}>{meds.filter(m=>m.done).length}/{meds.length}</span>}
         <span style={{fontSize:11,color:T.textDim,transform:medOpen?"rotate(0deg)":"rotate(-90deg)",transition:"transform .2s",display:"inline-block",lineHeight:1}}>▾</span>
       </button>
-      {medOpen&&(meds.length>0?meds.map((med,i)=>(
-        <div key={i} onClick={()=>onToggleMed(sel,i)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",borderBottom:i<meds.length-1?`1px solid ${T.border}`:"none",cursor:"pointer",opacity:med.done?0.45:1}}>
-          <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${med.done?T.green:T.borderMid}`,background:med.done?T.greenBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .2s"}}>
-            {med.done&&<span style={{color:T.green,fontSize:9,fontWeight:700}}>✓</span>}
+      {medOpen&&(meds.length>0?meds.map((med,i)=>{
+        const daysLeft=med.antal!=null&&med.dosDag>0?Math.floor(med.antal/med.dosDag):null;
+        const lowStock=med.bestallning!=null&&med.antal!=null&&med.antal<=med.bestallning;
+        const stockColor=lowStock?"#c0392b":daysLeft!=null&&daysLeft<7?"#d68a00":T.textDim;
+        return(
+        <div key={i} style={{borderBottom:i<meds.length-1?`1px solid ${T.border}`:"none"}}>
+          <div onClick={()=>onToggleMed(sel,i)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",cursor:"pointer",opacity:med.done?0.45:1}}>
+            <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${med.done?T.green:T.borderMid}`,background:med.done?T.greenBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .2s"}}>
+              {med.done&&<span style={{color:T.green,fontSize:9,fontWeight:700}}>✓</span>}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:11,color:T.text,fontWeight:600,textDecoration:med.done?"line-through":"none"}}>{med.name}</span>
+                <span style={{fontSize:9,color:T.textDim}}>{med.dose}</span>
+                {med.fassUrl&&<a href={med.fassUrl} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:9,color:"#6B4EA8",textDecoration:"none",marginLeft:2}} title="FASS">🔗</a>}
+              </div>
+              {med.antal!=null&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}>
+                <span style={{fontSize:9,color:stockColor,fontWeight:lowStock?700:400}}>{lowStock?"⚠️ ":""}{med.antal} kvar</span>
+                {daysLeft!=null&&<span style={{fontSize:8,color:stockColor}}>({daysLeft}d)</span>}
+              </div>}
+            </div>
+            <span style={{fontSize:8,padding:"1px 6px",borderRadius:999,background:flow.color+"18",color:flow.color,fontWeight:700,flexShrink:0}}>{med.who}</span>
           </div>
-          <div style={{flex:1}}><span style={{fontSize:11,color:T.text,fontWeight:600,textDecoration:med.done?"line-through":"none"}}>{med.name}</span><span style={{fontSize:9,color:T.textDim,marginLeft:4}}>{med.dose}</span></div>
-          <span style={{fontSize:8,padding:"1px 6px",borderRadius:999,background:flow.color+"18",color:flow.color,fontWeight:700}}>{med.who}</span>
-        </div>
-      )):<div style={{padding:"9px 11px",fontSize:11,color:T.textDim,textAlign:"center"}}>Inga mediciner detta flöde</div>)}
+          {med.doslogg&&med.doslogg.length>0&&<div style={{padding:"2px 11px 6px 37px",display:"flex",gap:4,flexWrap:"wrap"}}>
+            {med.doslogg.slice(-3).map((l,j)=><span key={j} style={{fontSize:8,color:T.textDim,background:T.surface,borderRadius:4,padding:"1px 5px"}}>{new Date(l.ts).toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"})}</span>)}
+          </div>}
+        </div>);
+      }):<div style={{padding:"9px 11px",fontSize:11,color:T.textDim,textAlign:"center"}}>Inga mediciner detta flöde</div>)}
     </div>}
   </div>;
 }
 
 /* ═══ KANBAN ════════════════════════════════════════════════════ */
 // makeTask importeras från ./taskLogic.js
-const EMPTY_FORM={title:"",desc:"",tags:[],mids:[],prio:"medium",lane:"ready",recur:"none",hideGuest:false};
+const EMPTY_FORM={title:"",desc:"",tags:[],mids:[],prio:"medium",lane:"ready",recur:"none",hideGuest:false,estimate:"none",subtasks:[],epicId:null};
+const ESTIMATES=[{val:"none",label:"Ingen",icon:"—"},{val:"30min",label:"30 min",icon:"🕐"},{val:"2h",label:"1–2 h",icon:"⏱️"},{val:"half",label:"Halvdag",icon:"🌅"},{val:"day",label:"Heldag",icon:"📅"}];
 
-function TaskForm({T,members,init,onSave,onCancel,showLane,showHideGuest}){
-  const [f,setF]=useState(init||EMPTY_FORM);
+function TaskForm({T,members,init,onSave,onCancel,showLane,showHideGuest,epics}){
+  const [f,setF]=useState(init?{...EMPTY_FORM,...init}:EMPTY_FORM);
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
   return <div style={{background:T.card,backdropFilter:T.blur,borderRadius:12,border:`2px solid ${T.amber}`,padding:12,display:"flex",flexDirection:"column",gap:7}}>
     <input placeholder="Titel *" value={f.title} onChange={e=>sf("title",e.target.value)} style={{padding:"7px 10px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
-    <input placeholder="Beskrivning" value={f.desc} onChange={e=>sf("desc",e.target.value)} style={{padding:"7px 10px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+    <input placeholder="Beskrivning" value={f.desc||""} onChange={e=>sf("desc",e.target.value)} style={{padding:"7px 10px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
     <div style={{display:"flex",gap:5}}>
       {Object.entries(PRIO_META).map(([k,v])=><button key={k} onClick={()=>sf("prio",k)} style={{flex:1,padding:"5px 2px",borderRadius:7,border:`1.5px solid ${f.prio===k?v.color:T.border}`,background:f.prio===k?v.bg:"transparent",color:f.prio===k?v.color:T.textDim,fontSize:9,fontWeight:f.prio===k?700:400,cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>{v.icon}<br/><span style={{fontSize:8}}>{v.label}</span></button>)}
     </div>
-    <select value={f.recur} onChange={e=>sf("recur",e.target.value)} style={{padding:"7px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit"}}>
+    {/* Tidsestimering */}
+    <div style={{display:"flex",gap:3}}>
+      {ESTIMATES.map(e=><button key={e.val} onClick={()=>sf("estimate",e.val)} style={{flex:1,padding:"4px 2px",borderRadius:7,border:`1.5px solid ${f.estimate===e.val?T.blue:T.border}`,background:f.estimate===e.val?T.blueBg:"transparent",color:f.estimate===e.val?T.blue:T.textDim,fontSize:8,fontWeight:f.estimate===e.val?700:400,cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>{e.icon}<br/>{e.label}</button>)}
+    </div>
+    <select value={f.recur||"none"} onChange={e=>sf("recur",e.target.value)} style={{padding:"7px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit"}}>
       {RECUR_OPTIONS.map(r=><option key={r.val} value={r.val}>{r.label}</option>)}
     </select>
+    {epics&&epics.length>0&&<select value={f.epicId||""} onChange={e=>sf("epicId",e.target.value||null)} style={{padding:"7px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit"}}>
+      <option value="">— Inget epic —</option>
+      {epics.map(ep=><option key={ep.id} value={ep.id}>{ep.icon} {ep.title}</option>)}
+    </select>}
     <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-      {ALL_TAGS.map(t=>{const tc=TAG_COLORS[t];const s=f.tags.includes(t);return <button key={t} onClick={()=>sf("tags",s?f.tags.filter(x=>x!==t):[...f.tags,t])} style={{padding:"2px 8px",borderRadius:999,border:`1px solid ${s?tc.text:T.border}`,background:s?tc.bg:"transparent",color:s?tc.text:T.textDim,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>;})}
+      {ALL_TAGS.map(t=>{const tc=TAG_COLORS[t];const s=(f.tags||[]).includes(t);return <button key={t} onClick={()=>sf("tags",s?(f.tags||[]).filter(x=>x!==t):[...(f.tags||[]),t])} style={{padding:"2px 8px",borderRadius:999,border:`1px solid ${s?tc.text:T.border}`,background:s?tc.bg:"transparent",color:s?tc.text:T.textDim,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>;})}
     </div>
     {members.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-      {members.map(m=>{const s=f.mids.includes(m.id);return <button key={m.id} onClick={()=>sf("mids",s?f.mids.filter(x=>x!==m.id):[...f.mids,m.id])} style={{display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:999,border:`1.5px solid ${s?m.color:T.border}`,background:s?m.color+"22":"transparent",cursor:"pointer",fontFamily:"inherit"}}>
+      {members.map(m=>{const s=(f.mids||[]).includes(m.id);return <button key={m.id} onClick={()=>sf("mids",s?(f.mids||[]).filter(x=>x!==m.id):[...(f.mids||[]),m.id])} style={{display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:999,border:`1.5px solid ${s?m.color:T.border}`,background:s?m.color+"22":"transparent",cursor:"pointer",fontFamily:"inherit"}}>
         <div style={{width:14,height:14,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{m.av}</div>
         <span style={{fontSize:10,color:s?m.color:T.textDim,fontWeight:s?700:400}}>{m.name}</span>
       </button>;})}
@@ -359,48 +436,83 @@ function TaskForm({T,members,init,onSave,onCancel,showLane,showHideGuest}){
   </div>;
 }
 
-function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,setDragTask,setDragOver}){
+function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,setDragTask,setDragOver,members,onUpdateTask}){
   const [exp,setExp]=useState(false);
+  const [dragging,setDragging]=useState(false);
+  const [newSub,setNewSub]=useState("");
   const pm=PRIO_META[task.prio]||PRIO_META.medium;
-  return <div key={task.id} draggable onDragStart={()=>setDragTask(task.id)} onDragEnd={()=>{setDragTask(null);setDragOver(null);}} style={{borderRadius:9,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden",marginBottom:5,cursor:"grab",userSelect:"none"}}>
+  const assignees=(members||[]).filter(m=>(task.mids||[]).includes(m.id));
+  const subs=task.subtasks||[];
+  const subsDone=subs.filter(s=>s.done).length;
+  const est=ESTIMATES.find(e=>e.val===task.estimate);
+
+  const toggleSub=(sid)=>onUpdateTask&&onUpdateTask(task.id,{subtasks:subs.map(s=>s.id===sid?{...s,done:!s.done}:s)});
+  const addSub=()=>{if(!newSub.trim())return;onUpdateTask&&onUpdateTask(task.id,{subtasks:[...subs,{id:Date.now(),title:newSub.trim(),done:false}]});setNewSub("");};
+  const delSub=(sid)=>onUpdateTask&&onUpdateTask(task.id,{subtasks:subs.filter(s=>s.id!==sid)});
+
+  return <div key={task.id} draggable
+    onDragStart={()=>{setDragTask(task.id);setDragging(true);}}
+    onDragEnd={()=>{setDragTask(null);setDragOver(null);setDragging(false);}}
+    style={{borderRadius:9,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden",marginBottom:5,cursor:"grab",userSelect:"none",opacity:dragging?0.4:1,transition:"opacity .15s"}}>
     <div style={{display:"flex",gap:7,alignItems:"center",padding:"8px 9px"}}>
       <span style={{color:T.textDim,fontSize:12,flexShrink:0}}>⠿</span>
       <div style={{width:3,borderRadius:3,alignSelf:"stretch",background:pm.color,flexShrink:0,minHeight:22}}/>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:11,fontWeight:700,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.title}</div>
-        <div style={{display:"flex",gap:2,marginTop:2,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:2,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
           <span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:pm.bg,color:pm.color,fontWeight:700}}>{pm.icon}</span>
           {task.recur!=="none"&&<span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:T.blueBg,color:T.blue,fontWeight:700}}>🔁</span>}
-          {task.tags.slice(0,2).map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
+          {est&&est.val!=="none"&&<span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:T.blueBg+"88",color:T.blue,fontWeight:600}}>{est.icon} {est.label}</span>}
+          {subs.length>0&&<span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:subsDone===subs.length?T.greenBg:T.surface,color:subsDone===subs.length?T.green:T.textDim,fontWeight:700}}>☑ {subsDone}/{subs.length}</span>}
+          {(task.tags||[]).slice(0,1).map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
         </div>
       </div>
-      <button onClick={()=>setExp(e=>!e)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:T.textDim,padding:"2px",lineHeight:1,transform:exp?"rotate(0)":"rotate(-90deg)",transition:"transform .2s",flexShrink:0}}>▾</button>
+      {assignees.length>0&&<div style={{display:"flex",marginRight:2}}>
+        {assignees.slice(0,3).map((m,i)=><div key={m.id} style={{width:18,height:18,borderRadius:"50%",background:m.color,border:`1.5px solid ${T.card}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700,marginLeft:i>0?-5:0,flexShrink:0}}>{m.av}</div>)}
+      </div>}
+      <button onClick={()=>setExp(e=>!e)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.textDim,padding:"6px 8px",lineHeight:1,transform:exp?"rotate(0)":"rotate(-90deg)",transition:"transform .2s",flexShrink:0}}>▾</button>
     </div>
+    {subs.length>0&&!exp&&<div style={{height:3,background:T.border,margin:"0 9px 6px"}}><div style={{height:"100%",borderRadius:2,background:subsDone===subs.length?T.green:T.amber,width:`${subs.length?subsDone/subs.length*100:0}%`,transition:"width .3s"}}/></div>}
     {exp&&<div style={{padding:"0 9px 8px",borderTop:`1px solid ${T.border}`,paddingTop:7,display:"flex",flexDirection:"column",gap:5}}>
       {task.desc&&<p style={{fontSize:10,color:T.textMid,lineHeight:1.4}}>{task.desc}</p>}
+      {/* Subtasks */}
+      {subs.length>0&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
+        {subs.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:6}}>
+          <button onClick={()=>toggleSub(s.id)} style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${s.done?T.green:T.border}`,background:s.done?T.greenBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,padding:0}}>
+            {s.done&&<span style={{color:T.green,fontSize:9,fontWeight:700}}>✓</span>}
+          </button>
+          <span style={{fontSize:10,color:s.done?T.textDim:T.text,textDecoration:s.done?"line-through":"none",flex:1}}>{s.title}</span>
+          <button onClick={()=>delSub(s.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:9,color:T.textDim,padding:"0 2px"}}>✕</button>
+        </div>)}
+      </div>}
+      <div style={{display:"flex",gap:4}}>
+        <input value={newSub} onChange={e=>setNewSub(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSub()} placeholder="+ Ny undertask..." style={{flex:1,padding:"4px 7px",borderRadius:6,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:10,fontFamily:"inherit",outline:"none"}}/>
+        <button onClick={addSub} style={{padding:"4px 8px",borderRadius:6,border:"none",background:T.amber,color:"#fff",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>+</button>
+      </div>
       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-        {LANES.filter(l=>l.id!==task.lane).map(l=><button key={l.id} onClick={()=>moveTask(task.id,l.id)} style={{padding:"2px 8px",borderRadius:5,border:`1px solid ${l.color}44`,background:l.bg,color:l.color,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>→ {l.label}</button>)}
-        <button onClick={()=>moveUp(task.id)} disabled={idx===0} style={{padding:"2px 7px",borderRadius:5,border:`1px solid ${T.border}`,background:"transparent",color:idx===0?T.textDim:T.text,fontSize:9,cursor:idx===0?"default":"pointer",fontFamily:"inherit"}}>↑</button>
-        <button onClick={()=>moveDown(task.id)} disabled={idx===lt.length-1} style={{padding:"2px 7px",borderRadius:5,border:`1px solid ${T.border}`,background:"transparent",color:idx===lt.length-1?T.textDim:T.text,fontSize:9,cursor:idx===lt.length-1?"default":"pointer",fontFamily:"inherit"}}>↓</button>
-        <button onClick={()=>setEditing(task)} style={{padding:"2px 7px",borderRadius:5,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
-        <button onClick={()=>delTask(task.id)} style={{padding:"2px 7px",borderRadius:5,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
+        {LANES.filter(l=>l.id!==task.lane).map(l=><button key={l.id} onClick={()=>moveTask(task.id,l.id)} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${l.color}44`,background:l.bg,color:l.color,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>→ {l.label}</button>)}
+        <button onClick={()=>moveUp(task.id)} disabled={idx===0} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:idx===0?T.textDim:T.text,fontSize:11,cursor:idx===0?"default":"pointer",fontFamily:"inherit"}}>↑</button>
+        <button onClick={()=>moveDown(task.id)} disabled={idx===lt.length-1} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:idx===lt.length-1?T.textDim:T.text,fontSize:11,cursor:idx===lt.length-1?"default":"pointer",fontFamily:"inherit"}}>↓</button>
+        <button onClick={()=>setEditing(task)} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
+        <button onClick={()=>delTask(task.id)} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
       </div>
     </div>}
   </div>;
 }
 
-function KanbanBoard({T,tasks,setTasks,members,guestMode}){
+function KanbanBoard({T,tasks,setTasks,members,guestMode,epics}){
   const [filterMid,setFilterMid]=useState("all");
   const [editing,setEditing]=useState(null);
   const [dragTask,setDragTask]=useState(null);
   const [dragOver,setDragOver]=useState(null);
   const moveTask=(id,lane)=>setTasks(p=>p.map(t=>t.id===id?{...t,lane}:t));
   const delTask=id=>setTasks(p=>p.filter(t=>t.id!==id));
+  const updateTask=(id,changes)=>setTasks(p=>p.map(t=>t.id===id?{...t,...changes}:t));
   const moveUp=(id)=>setTasks(p=>{const lane=p.find(t=>t.id===id)?.lane;const il=p.filter(t=>t.lane===lane).sort((a,b)=>a.order-b.order);const idx=il.findIndex(t=>t.id===id);if(idx===0)return p;const no=[...il];[no[idx-1],no[idx]]=[no[idx],no[idx-1]];const om=Object.fromEntries(no.map((t,i)=>[t.id,i]));return p.map(t=>om[t.id]!==undefined?{...t,order:om[t.id]}:t);});
   const moveDown=(id)=>setTasks(p=>{const lane=p.find(t=>t.id===id)?.lane;const il=p.filter(t=>t.lane===lane).sort((a,b)=>a.order-b.order);const idx=il.findIndex(t=>t.id===id);if(idx===il.length-1)return p;const no=[...il];[no[idx],no[idx+1]]=[no[idx+1],no[idx]];const om=Object.fromEntries(no.map((t,i)=>[t.id,i]));return p.map(t=>om[t.id]!==undefined?{...t,order:om[t.id]}:t);});
   const saveTask=(f)=>{if(editing==="new")setTasks(p=>[...p,{...makeTask(),...f,id:Date.now(),order:p.filter(t=>t.lane===f.lane).length}]);else setTasks(p=>p.map(t=>t.id===editing.id?{...t,...f}:t));setEditing(null);};
   const filtered=tasks.filter(t=>{if(guestMode&&t.hideGuest)return false;if(filterMid==="all")return true;return t.mids.includes(filterMid);});
-  const getLane=id=>filtered.filter(t=>t.lane===id).sort((a,b)=>a.order-b.order);
+  const getLane=id=>filtered.filter(t=>t.lane===id).sort((a,b)=>(a.order??0)-(b.order??0));
 
   return <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
     <div style={{padding:"9px 12px 7px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",flexShrink:0}}>
@@ -413,7 +525,7 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode}){
       </div>
       <button onClick={()=>setEditing("new")} style={{flexShrink:0,padding:"3px 11px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Ny uppgift</button>
     </div>
-    {editing&&<div style={{padding:"0 10px 8px",flexShrink:0}}><TaskForm T={T} members={members} init={editing!=="new"?{...editing}:{...EMPTY_FORM}} onSave={saveTask} onCancel={()=>setEditing(null)} showLane showHideGuest/></div>}
+    {editing&&<div style={{padding:"0 10px 8px",flexShrink:0}}><TaskForm T={T} members={members} init={editing!=="new"?{...editing}:{...EMPTY_FORM}} onSave={saveTask} onCancel={()=>setEditing(null)} showLane showHideGuest epics={epics}/></div>}
     <div style={{flex:1,overflow:"hidden",display:"flex"}}>
       {LANES.map((lane,li)=>{
         const lt=getLane(lane.id);
@@ -429,7 +541,7 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode}){
             {lt.length===0&&<div style={{textAlign:"center",padding:"16px 8px",color:T.textDim,fontSize:10,border:`1px dashed ${T.border}`,borderRadius:7,marginTop:3}}>Dra hit</div>}
             {lt.map((task,idx)=>{
               if(guestMode&&task.hideGuest)return null;
-              return <TaskCard key={task.id} T={T} task={task} idx={idx} lt={lt} moveTask={moveTask} moveUp={moveUp} moveDown={moveDown} setEditing={setEditing} delTask={delTask} setDragTask={setDragTask} setDragOver={setDragOver}/>;
+              return <TaskCard key={task.id} T={T} task={task} idx={idx} lt={lt} moveTask={moveTask} moveUp={moveUp} moveDown={moveDown} setEditing={setEditing} delTask={delTask} setDragTask={setDragTask} setDragOver={setDragOver} members={members} onUpdateTask={updateTask}/>;
             })}
           </div>
         </div>;
@@ -438,49 +550,256 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode}){
   </div>;
 }
 
+/* ═══ TEMPLATE EDITOR ═══════════════════════════════════════════ */
+function TemplateEditor({T,members,init,onSave,onCancel}){
+  const [name,setName]=useState(init?.name||"");
+  const [icon,setIcon]=useState(init?.icon||"📦");
+  const [taskList,setTaskList]=useState(()=>init?.tasks?.length ? init.tasks.map(t=>({...t})) : [{title:"",prio:"medium",mids:[],tags:[]}]);
+
+  const addTask=()=>setTaskList(p=>[...p,{title:"",prio:"medium",mids:[],tags:[]}]);
+  const updTask=(i,field,val)=>setTaskList(p=>p.map((t,j)=>j===i?{...t,[field]:val}:t));
+  const remTask=i=>setTaskList(p=>p.filter((_,j)=>j!==i));
+  const toggleMid=(i,mid)=>updTask(i,"mids",(taskList[i].mids||[]).includes(mid)?(taskList[i].mids||[]).filter(x=>x!==mid):[...(taskList[i].mids||[]),mid]);
+
+  const save=()=>{
+    if(!name.trim())return;
+    const tasks=taskList.filter(t=>t.title.trim());
+    if(!tasks.length)return;
+    onSave({...init,name:name.trim(),icon:icon.trim()||"📦",tasks});
+  };
+
+  return <div style={{background:T.card,backdropFilter:T.blur,borderRadius:12,border:`2px solid ${T.amber}`,padding:12,marginBottom:8}}>
+    <p style={{fontSize:10,fontWeight:700,color:T.amber,marginBottom:8}}>{init?"✏️ Redigera":"📦 Ny"} mall</p>
+    {/* Name + icon */}
+    <div style={{display:"flex",gap:6,marginBottom:10}}>
+      <input value={icon} onChange={e=>setIcon(e.target.value)} title="Emoji/ikon" style={{width:44,padding:"5px",borderRadius:7,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:18,textAlign:"center",fontFamily:"inherit",outline:"none"}}/>
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Mallens namn, t.ex. Veckostäd" style={{flex:1,padding:"6px 10px",borderRadius:7,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+    </div>
+    {/* Tasks */}
+    <p style={{fontSize:9,color:T.textDim,marginBottom:6,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>Uppgifter i mallen</p>
+    <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:7}}>
+      {taskList.map((t,i)=>(
+        <div key={i} style={{borderRadius:8,border:`1px solid ${T.border}`,background:T.surface,padding:"7px 8px",display:"flex",flexDirection:"column",gap:5}}>
+          <div style={{display:"flex",gap:5,alignItems:"center"}}>
+            <input value={t.title} onChange={e=>updTask(i,"title",e.target.value)} placeholder={`Uppgift ${i+1}…`}
+              style={{flex:1,padding:"5px 8px",borderRadius:6,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+            <button onClick={()=>remTask(i)} disabled={taskList.length===1} style={{background:"none",border:"none",cursor:taskList.length===1?"default":"pointer",color:T.textDim,fontSize:14,lineHeight:1,opacity:taskList.length===1?.3:1}}>✕</button>
+          </div>
+          <div style={{display:"flex",gap:3,flexWrap:"wrap",alignItems:"center"}}>
+            {/* Prio */}
+            {Object.entries(PRIO_META).map(([k,v])=>(
+              <button key={k} onClick={()=>updTask(i,"prio",k)} title={v.label} style={{padding:"2px 6px",borderRadius:5,border:`1.5px solid ${t.prio===k?v.color:T.border}`,background:t.prio===k?v.bg:"transparent",cursor:"pointer",fontSize:9,fontWeight:t.prio===k?700:400,color:t.prio===k?v.color:T.textDim}}>{v.icon} {v.label}</button>
+            ))}
+            {/* Members */}
+            {members.length>0&&<>
+              <span style={{fontSize:9,color:T.textDim,margin:"0 2px"}}>·</span>
+              {members.map(m=>(
+                <button key={m.id} onClick={()=>toggleMid(i,m.id)} style={{width:22,height:22,borderRadius:"50%",border:`2px solid ${(t.mids||[]).includes(m.id)?m.color:T.border}`,background:(t.mids||[]).includes(m.id)?m.color+"33":"transparent",cursor:"pointer",fontSize:9,fontWeight:700,color:m.color}}>{m.av}</button>
+              ))}
+            </>}
+          </div>
+        </div>
+      ))}
+    </div>
+    <button onClick={addTask} style={{width:"100%",padding:"5px",borderRadius:7,border:`1px dashed ${T.border}`,background:"transparent",color:T.amber,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:8}}>+ Lägg till uppgift</button>
+    <div style={{display:"flex",gap:6}}>
+      <button onClick={onCancel} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.border}`,background:"transparent",color:T.textMid,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Avbryt</button>
+      <button onClick={save} style={{flex:2,padding:"7px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Spara mall</button>
+    </div>
+  </div>;
+}
+
 /* ═══ PLANNING ══════════════════════════════════════════════════ */
-function PlanningTab({T,backlog,setBacklog,tasks,setTasks,members}){
+function PlanningTab({T,backlog,setBacklog,tasks,setTasks,members,templates,setTemplates,epics,setEpics}){
+  const [planView,setPlanView]=useState("backlog"); // backlog | templates | epics
   const [editing,setEditing]=useState(null);
+  const [editTmpl,setEditTmpl]=useState(null); // null | "new" | {template obj}
+  const [expandedTmpl,setExpandedTmpl]=useState(null);
+  const [newEpic,setNewEpic]=useState({title:"",icon:"🎯",desc:""});
+  const addEpic=()=>{if(!newEpic.title.trim())return;setEpics(p=>[...p,{...newEpic,id:Date.now(),createdAt:Date.now()}]);setNewEpic({title:"",icon:"🎯",desc:""});};
+  const delEpic=(id)=>setEpics(p=>p.filter(e=>e.id!==id));
+
+  // ── Backlog ──────────────────────────────────────────────────
   const saveToBacklog=(f)=>{if(editing==="new")setBacklog(p=>[...p,{...makeTask(),...f,id:Date.now()}]);else setBacklog(p=>p.map(b=>b.id===editing.id?{...b,...f}:b));setEditing(null);};
   const del=id=>setBacklog(p=>p.filter(b=>b.id!==id));
   const send=(item)=>{setTasks(p=>[...p,{...item,id:Date.now(),lane:"ready",order:p.filter(t=>t.lane==="ready").length}]);setBacklog(p=>p.filter(b=>b.id!==item.id));};
   const prioOrd={urgent:0,high:1,medium:2,low:3};
   const sorted=[...backlog].sort((a,b)=>prioOrd[a.prio]-prioOrd[b.prio]);
 
+  // ── Templates ────────────────────────────────────────────────
+  const activateTmpl=(tmpl)=>{
+    const base=tasks.filter(t=>t.lane==="ready").length;
+    const newTasks=tmpl.tasks.map((t,i)=>({
+      ...makeTask(),...t,
+      id:Date.now()+i,lane:"ready",order:base+i,
+      desc:t.desc||"",recur:t.recur||"none",hideGuest:false,
+    }));
+    setTasks(p=>[...p,...newTasks]);
+  };
+  const deleteTmpl=id=>setTemplates(p=>p.filter(t=>t.id!==id));
+  const saveTmpl=(tmpl)=>{
+    if(editTmpl==="new")setTemplates(p=>[...p,{...tmpl,id:Date.now()}]);
+    else setTemplates(p=>p.map(t=>t.id===tmpl.id?tmpl:t));
+    setEditTmpl(null);
+  };
+
   return <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
-    <div style={{padding:"9px 14px 7px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-      <div><span style={{fontSize:12,fontWeight:700,color:T.text}}>Planering & Backlogg</span><p style={{fontSize:9,color:T.textDim}}>Planera aktiviteter och skicka till tavlan</p></div>
-      <button onClick={()=>setEditing("new")} style={{padding:"3px 11px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Ny</button>
+
+    {/* ── Header with sub-tabs ── */}
+    <div style={{padding:"9px 14px 0",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
+        <span style={{fontSize:12,fontWeight:700,color:T.text}}>Planering</span>
+        <button onClick={()=>planView==="backlog"?setEditing("new"):setEditTmpl("new")}
+          style={{padding:"3px 11px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Ny</button>
+      </div>
+      <div style={{display:"flex"}}>
+        {[["backlog","📋 Backlogg"],["templates","📦 Mallar"],["epics","🎯 Epics"]].map(([id,label])=>(
+          <button key={id} onClick={()=>setPlanView(id)} style={{
+            flex:1,padding:"6px 4px",border:"none",
+            borderBottom:`2.5px solid ${planView===id?T.amber:"transparent"}`,
+            background:planView===id?T.amberBg:"transparent",
+            color:planView===id?T.amber:T.textDim,
+            fontSize:11,fontWeight:planView===id?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",
+          }}>{label}</button>
+        ))}
+      </div>
     </div>
-    {editing&&<div style={{padding:"7px 14px",flexShrink:0,borderBottom:`1px solid ${T.border}`}}><TaskForm T={T} members={members} init={editing!=="new"?{...editing}:EMPTY_FORM} onSave={saveToBacklog} onCancel={()=>setEditing(null)} showLane={false} showHideGuest/></div>}
-    <div style={{flex:1,overflowY:"auto",padding:"9px 14px 12px",display:"flex",flexDirection:"column",gap:7}}>
-      {sorted.length===0&&<div style={{textAlign:"center",padding:"28px",color:T.textDim,fontSize:13}}>Tom — tryck "+ Ny"</div>}
-      {sorted.map(item=>{
-        const pm=PRIO_META[item.prio]||PRIO_META.medium;
-        return <div key={item.id} style={{borderRadius:12,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden"}}>
-          <div style={{padding:"10px 12px",display:"flex",gap:7,alignItems:"center"}}>
-            <div style={{width:3,borderRadius:3,alignSelf:"stretch",background:pm.color,flexShrink:0,minHeight:30}}/>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
-                <span style={{fontSize:12,fontWeight:700,color:T.text}}>{item.title}</span>
-                {item.hideGuest&&<span style={{fontSize:8,padding:"1px 5px",borderRadius:999,background:"#9B8DC922",color:"#9B8DC9",fontWeight:700}}>🙈</span>}
+
+    {/* ── BACKLOG ── */}
+    {planView==="backlog"&&<>
+      {editing&&<div style={{padding:"7px 14px",flexShrink:0,borderBottom:`1px solid ${T.border}`}}>
+        <TaskForm T={T} members={members} init={editing!=="new"?{...editing}:EMPTY_FORM} onSave={saveToBacklog} onCancel={()=>setEditing(null)} showLane={false} showHideGuest/>
+      </div>}
+      <div style={{flex:1,overflowY:"auto",padding:"9px 14px 12px",display:"flex",flexDirection:"column",gap:7}}>
+        {sorted.length===0&&<div style={{textAlign:"center",padding:"28px",color:T.textDim,fontSize:13}}>Tom — tryck "+ Ny"</div>}
+        {sorted.map(item=>{
+          const pm=PRIO_META[item.prio]||PRIO_META.medium;
+          return <div key={item.id} style={{borderRadius:12,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden"}}>
+            <div style={{padding:"10px 12px",display:"flex",gap:7,alignItems:"center"}}>
+              <div style={{width:3,borderRadius:3,alignSelf:"stretch",background:pm.color,flexShrink:0,minHeight:30}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
+                  <span style={{fontSize:12,fontWeight:700,color:T.text}}>{item.title}</span>
+                  {item.hideGuest&&<span style={{fontSize:8,padding:"1px 5px",borderRadius:999,background:"#9B8DC922",color:"#9B8DC9",fontWeight:700}}>🙈</span>}
+                </div>
+                <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                  <span style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:pm.bg,color:pm.color,fontWeight:700}}>{pm.icon} {pm.label}</span>
+                  {item.recur!=="none"&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:T.blueBg,color:T.blue,fontWeight:700}}>🔁 {RECUR_OPTIONS.find(r=>r.val===item.recur)?.label}</span>}
+                  {item.tags.map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
+                </div>
+                {item.desc&&<p style={{fontSize:10,color:T.textMid,marginTop:3,lineHeight:1.4}}>{item.desc}</p>}
               </div>
-              <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                <span style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:pm.bg,color:pm.color,fontWeight:700}}>{pm.icon} {pm.label}</span>
-                {item.recur!=="none"&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:T.blueBg,color:T.blue,fontWeight:700}}>🔁 {RECUR_OPTIONS.find(r=>r.val===item.recur)?.label}</span>}
-                {item.tags.map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:9,padding:"1px 5px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
-              </div>
-              {item.desc&&<p style={{fontSize:10,color:T.textMid,marginTop:3,lineHeight:1.4}}>{item.desc}</p>}
             </div>
+            <div style={{padding:"0 12px 9px",display:"flex",gap:4,flexWrap:"wrap",borderTop:`1px solid ${T.border}`,paddingTop:7}}>
+              <button onClick={()=>send(item)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.green}`,background:T.greenBg,color:T.green,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>→ Tavlan</button>
+              <button onClick={()=>setEditing(item)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
+              <button onClick={()=>del(item.id)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
+            </div>
+          </div>;
+        })}
+      </div>
+    </>}
+
+    {/* ── MALLAR ── */}
+    {planView==="templates"&&<div style={{flex:1,overflowY:"auto",padding:"9px 14px 12px",display:"flex",flexDirection:"column",gap:8}}>
+      {/* Template editor (inline) */}
+      {editTmpl&&<TemplateEditor T={T} members={members}
+        init={editTmpl==="new"?null:editTmpl}
+        onSave={saveTmpl} onCancel={()=>setEditTmpl(null)}/>}
+
+      {templates.length===0&&!editTmpl&&<div style={{textAlign:"center",padding:"28px",color:T.textDim,fontSize:13}}>
+        Inga mallar ännu — tryck "+ Ny" för att skapa den första
+      </div>}
+
+      {templates.map(tmpl=>{
+        const expanded=expandedTmpl===tmpl.id;
+        return <div key={tmpl.id} style={{borderRadius:12,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden"}}>
+          {/* Header row */}
+          <div style={{padding:"11px 12px",display:"flex",alignItems:"center",gap:9}}>
+            <span style={{fontSize:22,flexShrink:0,lineHeight:1}}>{tmpl.icon||"📦"}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontSize:13,fontWeight:700,color:T.text,lineHeight:1.2}}>{tmpl.name}</p>
+              <p style={{fontSize:10,color:T.textDim,marginTop:2}}>{tmpl.tasks.length} uppgifter</p>
+            </div>
+            <button onClick={()=>setExpandedTmpl(expanded?null:tmpl.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.textDim,transform:expanded?"rotate(0deg)":"rotate(-90deg)",transition:"transform .2s",lineHeight:1,flexShrink:0}}>▾</button>
           </div>
-          <div style={{padding:"0 12px 9px",display:"flex",gap:4,flexWrap:"wrap",borderTop:`1px solid ${T.border}`,paddingTop:7}}>
-            <button onClick={()=>send(item)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.green}`,background:T.greenBg,color:T.green,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>→ Tavlan</button>
-            <button onClick={()=>setEditing(item)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
-            <button onClick={()=>del(item.id)} style={{padding:"2px 9px",borderRadius:6,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
-          </div>
+
+          {/* Expanded task list */}
+          {expanded&&<div style={{borderTop:`1px solid ${T.border}`,padding:"8px 12px 10px"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:9}}>
+              {tmpl.tasks.map((t,i)=>{
+                const pm=PRIO_META[t.prio]||PRIO_META.medium;
+                const assignees=members.filter(m=>(t.mids||[]).includes(m.id));
+                return <div key={i} style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",borderRadius:7,background:T.surface,border:`1px solid ${T.border}`}}>
+                  <div style={{width:3,minHeight:14,alignSelf:"stretch",borderRadius:2,background:pm.color,flexShrink:0}}/>
+                  <span style={{fontSize:11,color:T.text,flex:1,lineHeight:1.3}}>{t.title}</span>
+                  {assignees.map(m=><div key={m.id} style={{width:18,height:18,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700,flexShrink:0}}>{m.av}</div>)}
+                  <span style={{fontSize:9,color:pm.color,fontWeight:700,flexShrink:0}}>{pm.icon}</span>
+                </div>;
+              })}
+            </div>
+            <div style={{display:"flex",gap:5}}>
+              <button onClick={()=>{activateTmpl(tmpl);setExpandedTmpl(null);}}
+                style={{flex:2,padding:"7px 10px",borderRadius:8,border:"none",background:T.green,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✅ Aktivera → Tavlan</button>
+              <button onClick={()=>setEditTmpl(tmpl)}
+                style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${T.blue}`,background:T.blueBg,color:T.blue,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
+              <button onClick={()=>deleteTmpl(tmpl.id)}
+                style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
+            </div>
+          </div>}
+
+          {/* Quick activate (collapsed) */}
+          {!expanded&&<div style={{padding:"0 12px 10px"}}>
+            <button onClick={()=>activateTmpl(tmpl)}
+              style={{width:"100%",padding:"6px",borderRadius:8,border:`1px solid ${T.green}33`,background:T.greenBg,color:T.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              ✅ Aktivera — {tmpl.tasks.length} uppgifter → Tavlan
+            </button>
+          </div>}
         </div>;
       })}
-    </div>
+    </div>}
+
+    {/* ── EPICS ── */}
+    {planView==="epics"&&<div style={{flex:1,overflowY:"auto",padding:"9px 14px 12px",display:"flex",flexDirection:"column",gap:8}}>
+      {/* Skapa nytt epic */}
+      <div style={{background:T.card,borderRadius:12,border:`1.5px solid ${T.amber}`,padding:12}}>
+        <p style={{fontSize:10,fontWeight:700,color:T.amber,marginBottom:8}}>🎯 Nytt epic</p>
+        <div style={{display:"flex",gap:6,marginBottom:7}}>
+          <input value={newEpic.icon} onChange={e=>setNewEpic(p=>({...p,icon:e.target.value}))} style={{width:40,padding:"6px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:18,textAlign:"center",fontFamily:"inherit",outline:"none"}}/>
+          <input value={newEpic.title} onChange={e=>setNewEpic(p=>({...p,title:e.target.value}))} placeholder="Epicets titel, t.ex. Renovera badrum" style={{flex:1,padding:"6px 10px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+        </div>
+        <input value={newEpic.desc} onChange={e=>setNewEpic(p=>({...p,desc:e.target.value}))} placeholder="Beskrivning (valfri)" style={{width:"100%",padding:"6px 10px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:7}}/>
+        <button onClick={addEpic} style={{width:"100%",padding:"6px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Skapa epic</button>
+      </div>
+      {(epics||[]).length===0&&<div style={{textAlign:"center",padding:"24px",color:T.textDim,fontSize:11,border:`1px dashed ${T.border}`,borderRadius:10}}>Inga epics ännu. Skapa ett ovan.</div>}
+      {(epics||[]).map(ep=>{
+        const linked=tasks.filter(t=>t.epicId===String(ep.id));
+        const done=linked.filter(t=>t.lane==="done").length;
+        const pct=linked.length?Math.round(done/linked.length*100):0;
+        return <div key={ep.id} style={{background:T.card,borderRadius:12,border:`1px solid ${T.border}`,padding:"11px 12px",boxShadow:T.shadow}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <span style={{fontSize:22}}>{ep.icon}</span>
+            <div style={{flex:1}}>
+              <p style={{fontSize:13,fontWeight:700,color:T.text}}>{ep.title}</p>
+              {ep.desc&&<p style={{fontSize:10,color:T.textDim,marginTop:2}}>{ep.desc}</p>}
+            </div>
+            <button onClick={()=>delEpic(ep.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:12,padding:"2px 4px"}}>🗑</button>
+          </div>
+          <div style={{height:6,background:T.border,borderRadius:3,marginBottom:6,overflow:"hidden"}}>
+            <div style={{height:"100%",background:pct===100?T.green:T.amber,width:`${pct}%`,borderRadius:3,transition:"width .4s"}}/>
+          </div>
+          <p style={{fontSize:9,color:T.textDim,marginBottom:6}}>{done}/{linked.length} tasks klara · {pct}%</p>
+          {linked.length>0&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {linked.map(t=><div key={t.id} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0"}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:t.lane==="done"?T.green:t.lane==="progress"?T.amber:T.border,flexShrink:0}}/>
+              <span style={{fontSize:10,color:t.lane==="done"?T.textDim:T.text,textDecoration:t.lane==="done"?"line-through":"none",flex:1}}>{t.title}</span>
+              <span style={{fontSize:8,color:T.textDim}}>{LANES.find(l=>l.id===t.lane)?.label}</span>
+            </div>)}
+          </div>}
+        </div>;
+      })}
+    </div>}
+
   </div>;
 }
 
@@ -494,6 +813,97 @@ function getLevelPct(points){ const l=getLevel(points); return Math.round((point
 
 // Tomt stats-objekt för en ny familjemedlem
 const emptyStats=()=>({points:0,total:0,streak:0,byCategory:{}});
+
+/* ═══ AKTIVITETSHJULET ══════════════════════════════════════════ */
+const DEFAULT_WHEEL_ITEMS=["Spela brädspel","Baka något gott","Cykla","Rita och måla","Bygga med lego","Titta på film","Leka ute","Vattenlek","Dansa","Pyssel","Lyssna på bok","Friluftsliv"];
+const WHEEL_COLORS=["#FF6B6B","#4ECDC4","#45B7D1","#96CEB4","#FFEAA7","#DDA0DD","#98D8C8","#F7DC6F","#BB8FCE","#85C1E9","#F0B27A","#82E0AA"];
+
+function ActivityWheel({T}){
+  const [items,setItems]=useLocalStorage("fp_wheel_items",DEFAULT_WHEEL_ITEMS);
+  const [spinning,setSpinning]=useState(false);
+  const [result,setResult]=useState(null);
+  const [rotation,setRotation]=useState(0);
+  const [newItem,setNewItem]=useState("");
+
+  function spin(){
+    if(spinning||items.length===0)return;
+    setSpinning(true);
+    setResult(null);
+    const idx=Math.floor(Math.random()*items.length);
+    const spins=5+Math.random()*5; // 5-10 full rotations
+    const segAngle=360/items.length;
+    const targetAngle=360*spins+(360-idx*segAngle-segAngle/2);
+    const newRot=rotation+targetAngle;
+    setRotation(newRot);
+    setTimeout(()=>{setResult(items[idx]);setSpinning(false);},3200);
+  }
+
+  function addItem(){
+    if(!newItem.trim()||items.includes(newItem.trim()))return;
+    setItems(p=>[...p,newItem.trim()]);
+    setNewItem("");
+  }
+
+  const size=240;
+  const cx=size/2, cy=size/2, r=size/2-4;
+  const segAngle=items.length>0?360/items.length:360;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,padding:"16px",alignItems:"center"}}>
+    {/* Wheel */}
+    <div style={{position:"relative",width:size,height:size}}>
+      <svg width={size} height={size} style={{transform:`rotate(${rotation}deg)`,transition:spinning?"transform 3.2s cubic-bezier(0.17,0.67,0.12,0.99)":"none",display:"block"}}>
+        {items.map((item,i)=>{
+          const a1=(i*segAngle-90)*Math.PI/180;
+          const a2=((i+1)*segAngle-90)*Math.PI/180;
+          const x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
+          const x2=cx+r*Math.cos(a2), y2=cy+r*Math.sin(a2);
+          const largeArc=segAngle>180?1:0;
+          const mid=((i+0.5)*segAngle-90)*Math.PI/180;
+          const tx=cx+(r*0.62)*Math.cos(mid), ty=cy+(r*0.62)*Math.sin(mid);
+          const shortLabel=item.length>12?item.slice(0,10)+"…":item;
+          return <g key={i}>
+            <path d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} Z`} fill={WHEEL_COLORS[i%WHEEL_COLORS.length]} stroke="#fff" strokeWidth="2"/>
+            <text x={tx} y={ty} textAnchor="middle" dominantBaseline="middle" fontSize={items.length>8?9:11} fontWeight="600" fill="#fff" transform={`rotate(${(i+0.5)*segAngle},${tx},${ty})`} style={{textShadow:"0 1px 2px rgba(0,0,0,0.4)",pointerEvents:"none"}}>{shortLabel}</text>
+          </g>;
+        })}
+        <circle cx={cx} cy={cy} r={16} fill="#fff" stroke="#ddd" strokeWidth="2"/>
+      </svg>
+      {/* Pointer */}
+      <div style={{position:"absolute",top:-8,left:"50%",transform:"translateX(-50%)",fontSize:24,filter:"drop-shadow(0 2px 3px rgba(0,0,0,0.3))"}}>▼</div>
+    </div>
+
+    {/* Result */}
+    {result&&<div style={{background:"linear-gradient(135deg,#667eea,#764ba2)",borderRadius:14,padding:"12px 24px",textAlign:"center",color:"#fff",minWidth:200}}>
+      <p style={{fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",margin:"0 0 4px",opacity:0.8}}>Aktivitet idag!</p>
+      <p style={{fontSize:18,fontWeight:700,margin:0}}>{result}</p>
+    </div>}
+
+    <button onClick={spin} disabled={spinning||items.length<2} style={{padding:"12px 32px",borderRadius:999,border:"none",background:spinning?"#ccc":"linear-gradient(135deg,#667eea,#764ba2)",color:"#fff",fontSize:14,fontWeight:700,cursor:spinning?"default":"pointer",boxShadow:"0 4px 15px rgba(102,126,234,0.4)",transition:"all .2s"}}>
+      {spinning?"Snurrar…":"🎡 Snurra!"}
+    </button>
+
+    {/* Edit items */}
+    <div style={{width:"100%",maxWidth:400,background:T.card,borderRadius:10,border:`1px solid ${T.border}`,overflow:"hidden"}}>
+      <div style={{padding:"8px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:6}}>
+        <span style={{fontSize:11,fontWeight:700,color:T.text,flex:1}}>Aktiviteter på hjulet</span>
+        <span style={{fontSize:10,color:T.textDim}}>{items.length} st</span>
+      </div>
+      <div style={{display:"flex",gap:5,padding:"8px 10px",borderBottom:`1px solid ${T.border}`}}>
+        <input value={newItem} onChange={e=>setNewItem(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addItem()} placeholder="Ny aktivitet…" style={{flex:1,padding:"5px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+        <button onClick={addItem} style={{padding:"5px 12px",borderRadius:7,border:"none",background:"#667eea",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>+</button>
+      </div>
+      <div style={{maxHeight:180,overflowY:"auto"}}>
+        {items.map((item,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",borderBottom:`1px solid ${T.border}`}}>
+            <span style={{width:10,height:10,borderRadius:"50%",background:WHEEL_COLORS[i%WHEEL_COLORS.length],flexShrink:0,display:"inline-block"}}/>
+            <span style={{flex:1,fontSize:11,color:T.text}}>{item}</span>
+            <button onClick={()=>setItems(p=>p.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:13,lineHeight:1}}>✕</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>;
+}
 
 function KidsPointsTab({T,members,choresDone,setChoresDone,choresList}){
   // Sparade stats per person-id: { [id]: {points, total, streak, byCategory} }
@@ -519,6 +929,7 @@ function KidsPointsTab({T,members,choresDone,setChoresDone,choresList}){
   }));
 
   const [selKid,setSelKid]=useState(activeMembers[0]?.id);
+  const [kidsTab,setKidsTab]=useState("sysslor"); // sysslor | hjul
   const [view,setView]=useState("chores"); // chores | rewards | history
   const [flash,setFlash]=useState(null); // {kidId, points, title}
   const [confetti,setConfetti]=useState([]);
@@ -606,6 +1017,15 @@ function KidsPointsTab({T,members,choresDone,setChoresDone,choresList}){
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden",position:"relative"}}>
+      {/* Tab toggle */}
+      <div style={{display:"flex",gap:6,padding:"8px 14px",borderBottom:`1px solid ${T.border}`,background:T.surface,flexShrink:0}}>
+        {[["sysslor","⭐ Sysslor"],["hjul","🎡 Aktivitetshjulet"]].map(([id,lbl])=>(
+          <button key={id} onClick={()=>setKidsTab(id)} style={{padding:"5px 14px",borderRadius:20,border:`1.5px solid ${kidsTab===id?T.amber:T.border}`,background:kidsTab===id?T.amberBg:"transparent",color:kidsTab===id?T.amber:T.textMid,fontSize:11,fontWeight:kidsTab===id?700:400,cursor:"pointer",fontFamily:"inherit"}}>{lbl}</button>
+        ))}
+      </div>
+
+      {kidsTab==="hjul"&&<div style={{flex:1,overflowY:"auto"}}><ActivityWheel T={T}/></div>}
+      {kidsTab==="sysslor"&&<>
 
       {/* Confetti */}
       {confetti.map(c=>(
@@ -816,6 +1236,7 @@ function KidsPointsTab({T,members,choresDone,setChoresDone,choresList}){
           ))}
         </>}
       </div>
+      </>}
     </div>
   );
 }
@@ -886,6 +1307,52 @@ function HueLampRow({T,lamps,setLamps}){
   </div>;
 }
 
+/* ═══ SMART SCHOOL-MENU PARSER ══════════════════════════════════
+ * Hanterar copy-paste från PDF-matsedlar (radbruten tabelltext).
+ * Regel: ny rätt = rad börjar med stor bokstav OCH föregående rad
+ *        slutar INTE med ett bindningsord (med, och, &, …).
+ * ════════════════════════════════════════════════════════════════ */
+function parseSchoolPaste(raw){
+  const DAYS_SV=["monday","tuesday","wednesday","thursday","friday"];
+  const DAY_RE=/måndag|tisdag|onsdag|torsdag|fredag/i;
+  const WEEK_RE=/^vecka\s+\d+/i;
+  const CONNECTOR=/\b(med|och|i|på|av|till|från|ur|samt)\s*$|[&]\s*$/i;
+  const CAPITAL=/^[A-ZÅÄÖ]/;
+
+  // 1. Rensa headers
+  const lines=raw.split("\n")
+    .map(l=>l.trim()).filter(Boolean)
+    .filter(l=>!WEEK_RE.test(l))                          // "Vecka 17"
+    .filter(l=>(l.match(DAY_RE)||[]).length<2);           // dagnamnsrad
+
+  // 2. Slå ihop radbrutna maträtter
+  const meals=[];
+  let cur="";
+  lines.forEach((line,i)=>{
+    const prev=i>0?lines[i-1]:"";
+    const isNew=CAPITAL.test(line)&&!CONNECTOR.test(prev)&&i>0;
+    if(isNew&&cur){meals.push(cur.trim());cur=line;}
+    else{cur=cur?cur+" "+line:line;}
+  });
+  if(cur.trim())meals.push(cur.trim());
+
+  // 3. Fördela på dagar
+  // Om vi fick 10 rätter → 2 rätter/dag (kött + vego), visa som "rätt 1 / rätt 2"
+  const n=meals.length;
+  const result={};
+  if(n>=10){
+    DAYS_SV.forEach((d,i)=>{
+      result[d]=[meals[i],meals[i+5]].filter(Boolean).join(" / ");
+    });
+  } else if(n>=5){
+    DAYS_SV.forEach((d,i)=>{result[d]=meals[i]||"";});
+  } else if(n>0){
+    // Färre rätter än 5 — fyll in så många vi har
+    DAYS_SV.forEach((d,i)=>{if(meals[i])result[d]=meals[i];});
+  }
+  return result;
+}
+
 /* ═══ SETTINGS ══════════════════════════════════════════════════ */
 function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,schoolMenu,setSchoolMenu,gcal,gcalClientId,setGcalClientId,flowMeds,setFlowMeds,choresList,setChoresList,setChoresDone,onClose}){
   const set=(k,v)=>setCfg(s=>({...s,[k]:v}));
@@ -898,7 +1365,7 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
   const [schoolPaste,setSchoolPaste]=useState("");
   const [section,setSection]=useState("general"); // general | mediciner | meals | school | sysslor
   const [localMeds,setLocalMeds]=useState(()=>JSON.parse(JSON.stringify(flowMeds)));
-  const [newMed,setNewMed]=useState({flowId:"morning",name:"",dose:"",who:""});
+  const [newMed,setNewMed]=useState({flowId:"morning",name:"",dose:"",who:"",antal:"",dosDag:"1",bestallning:"",fassUrl:""});
   const [localChores,setLocalChores]=useState(()=>[...(choresList||CHORES_LIST)]);
   const [newChore,setNewChore]=useState({title:"",icon:"⭐",category:"Övrigt",points:5});
 
@@ -1052,27 +1519,12 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
           <div style={{marginBottom:12,padding:"10px 12px",borderRadius:9,background:T.surface,border:`1px solid ${T.border}`}}>
             <p style={{fontSize:10,fontWeight:700,color:T.textMid,marginBottom:6}}>📋 Klistra in veckomeny</p>
             <textarea value={schoolPaste} onChange={e=>setSchoolPaste(e.target.value)}
-              placeholder={"Klistra in matsedeln här.\nMåndag: Köttbullar med mos\nTisdag: Fiskpinnar\n...\nEller: en rätt per rad (mån–fre i ordning)."}
+              placeholder={"Klistra in matsedeln här — fungerar med PDF-kopia!\n\nExempel:\nVecka 17\nMåndag 20/4  Tisdag 21/4  Onsdag 22/4 ...\nSojafärssås med\npasta\nKebabtallrik med\nris & vitlökssås\n..."}
               rows={6} style={{width:"100%",padding:"8px 10px",borderRadius:7,border:`1.5px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",resize:"vertical",marginBottom:6,boxSizing:"border-box"}}/>
             <button onClick={()=>{
-              const text=schoolPaste;
-              const days={monday:"",tuesday:"",wednesday:"",thursday:"",friday:""};
-              const patterns=[
-                [/måndag[:\s]+(.+)/i,"monday"],[/tisdag[:\s]+(.+)/i,"tuesday"],
-                [/onsdag[:\s]+(.+)/i,"wednesday"],[/torsdag[:\s]+(.+)/i,"thursday"],
-                [/fredag[:\s]+(.+)/i,"friday"],
-                [/monday[:\s]+(.+)/i,"monday"],[/tuesday[:\s]+(.+)/i,"tuesday"],
-                [/wednesday[:\s]+(.+)/i,"wednesday"],[/thursday[:\s]+(.+)/i,"thursday"],
-                [/friday[:\s]+(.+)/i,"friday"],
-              ];
-              let matched=false;
-              patterns.forEach(([re,key])=>{const m=text.match(re);if(m){days[key]=m[1].trim();matched=true;}});
-              if(!matched){
-                const lines=text.split("\n").map(l=>l.trim()).filter(Boolean);
-                const keys=["monday","tuesday","wednesday","thursday","friday"];
-                lines.forEach((l,i)=>{if(i<5)days[keys[i]]=l;});
-              }
-              setSchool(s=>({...s,...Object.fromEntries(Object.entries(days).filter(([,v])=>v))}));
+              const parsed=parseSchoolPaste(schoolPaste);
+              if(Object.keys(parsed).length===0){alert("Kunde inte tolka matsedeln — prova att klistra in hela texten inklusive dagnamnen.");return;}
+              setSchool(s=>({...s,...parsed}));
               setSchoolPaste("");
             }} style={{width:"100%",padding:"6px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Tolka och fyll i automatiskt</button>
           </div>
@@ -1123,15 +1575,21 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
             <div style={{display:"flex",gap:4,marginBottom:7,flexWrap:"wrap"}}>
               {FLOWS.map(f=><button key={f.id} onClick={()=>setNewMed(m=>({...m,flowId:f.id}))} style={{padding:"3px 8px",borderRadius:6,border:`1.5px solid ${newMed.flowId===f.id?f.color:T.border}`,background:newMed.flowId===f.id?f.color+"18":"transparent",color:newMed.flowId===f.id?f.color:T.textDim,fontSize:9,fontWeight:newMed.flowId===f.id?700:400,cursor:"pointer",fontFamily:"inherit"}}>{f.icon} {f.label}</button>)}
             </div>
+            <input value={newMed.name} onChange={e=>setNewMed(m=>({...m,name:e.target.value}))} placeholder="Namn" style={{width:"100%",padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",marginBottom:5,boxSizing:"border-box"}}/>
             <div style={{display:"flex",gap:5,marginBottom:5}}>
-              <input value={newMed.name} onChange={e=>setNewMed(m=>({...m,name:e.target.value}))} placeholder="Namn" style={{flex:2,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
-              <input value={newMed.dose} onChange={e=>setNewMed(m=>({...m,dose:e.target.value}))} placeholder="Dos" style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
-              <input value={newMed.who} onChange={e=>setNewMed(m=>({...m,who:e.target.value}))} placeholder="Vem" style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+              <input value={newMed.dose} onChange={e=>setNewMed(m=>({...m,dose:e.target.value}))} placeholder="Dos (t.ex. 1 tabl.)" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+              <input value={newMed.who} onChange={e=>setNewMed(m=>({...m,who:e.target.value}))} placeholder="Vem" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
             </div>
+            <div style={{display:"flex",gap:5,marginBottom:5}}>
+              <input value={newMed.antal} onChange={e=>setNewMed(m=>({...m,antal:e.target.value}))} placeholder="Antal kvar" type="number" min="0" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+              <input value={newMed.dosDag} onChange={e=>setNewMed(m=>({...m,dosDag:e.target.value}))} placeholder="Dos/dag" type="number" min="1" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+              <input value={newMed.bestallning} onChange={e=>setNewMed(m=>({...m,bestallning:e.target.value}))} placeholder="Beställ vid" type="number" min="0" style={{flex:1,minWidth:0,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+            </div>
+            <input value={newMed.fassUrl} onChange={e=>setNewMed(m=>({...m,fassUrl:e.target.value}))} placeholder="FASS-länk (valfri URL)" style={{width:"100%",padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",marginBottom:5,boxSizing:"border-box"}}/>
             <button onClick={()=>{
               if(!newMed.name.trim())return;
-              setLocalMeds(p=>({...p,[newMed.flowId]:[...(p[newMed.flowId]||[]),{name:newMed.name.trim(),dose:newMed.dose.trim(),who:newMed.who.trim(),done:false}]}));
-              setNewMed(m=>({...m,name:"",dose:"",who:""}));
+              setLocalMeds(p=>({...p,[newMed.flowId]:[...(p[newMed.flowId]||[]),{name:newMed.name.trim(),dose:newMed.dose.trim(),who:newMed.who.trim(),done:false,antal:newMed.antal===''?null:Number(newMed.antal),dosDag:Number(newMed.dosDag)||1,bestallning:newMed.bestallning===''?null:Number(newMed.bestallning),fassUrl:newMed.fassUrl.trim(),doslogg:[]}]}));
+              setNewMed(m=>({...m,name:"",dose:"",who:"",antal:"",dosDag:"1",bestallning:"",fassUrl:""}));
             }} style={{width:"100%",padding:"7px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Lägg till medicin</button>
           </div>
         </>}
@@ -1293,6 +1751,562 @@ function GuestToast({guestMode,T}){
   </div>;
 }
 
+/* ═══ BIL & HUS ═════════════════════════════════════════════════ */
+const CAR_TEMPLATES=[
+  {title:"Sommardäck",icon:"🔄",month:4,recur:"yearly",cat:"Bil"},
+  {title:"Vinterdäck",icon:"❄️",month:10,recur:"yearly",cat:"Bil"},
+  {title:"Besiktning",icon:"🔍",month:6,recur:"yearly",cat:"Bil"},
+  {title:"Service",icon:"🔧",month:3,recur:"yearly",cat:"Bil"},
+  {title:"Biltvätt",icon:"🚿",month:5,recur:"yearly",cat:"Bil"},
+];
+const HOUSE_CATS=["Utvändigt","Inomhus","Teknik","Trädgård","Städning"];
+const HOUSE_TEMPLATES=[
+  {title:"Rengöra värmepump",icon:"🌡️",intervalMonths:6,cat:"Teknik"},
+  {title:"Byta batterier brandvarnare",icon:"🔋",intervalMonths:12,cat:"Teknik"},
+  {title:"Rensa hängrännor",icon:"🪣",intervalMonths:6,cat:"Utvändigt"},
+  {title:"Måla träfasad",icon:"🎨",intervalMonths:60,cat:"Utvändigt"},
+  {title:"Kontrollera tak",icon:"🏠",intervalMonths:24,cat:"Utvändigt"},
+  {title:"Rensa avlopp",icon:"🚿",intervalMonths:12,cat:"Inomhus"},
+  {title:"Klippa häck",icon:"✂️",intervalMonths:3,cat:"Trädgård"},
+];
+const MONTH_SV=["Jan","Feb","Mar","Apr","Maj","Jun","Jul","Aug","Sep","Okt","Nov","Dec"];
+
+function CarHouseTab({T,carReminders,setCarReminders,houseItems,setHouseItems}){
+  const [view,setView]=useState("car"); // car | house
+  const [newCar,setNewCar]=useState({title:"",icon:"🚗",month:new Date().getMonth()+1,notes:""});
+  const [newHouse,setNewHouse]=useState({title:"",icon:"🏠",intervalMonths:12,cat:"Inomhus",notes:"",lastDone:""});
+  const today=new Date();
+
+  const addCar=()=>{if(!newCar.title.trim())return;setCarReminders(p=>[...p,{...newCar,id:Date.now()}]);setNewCar({title:"",icon:"🚗",month:today.getMonth()+1,notes:""});};
+  const delCar=id=>setCarReminders(p=>p.filter(r=>r.id!==id));
+  const doneCarNow=id=>setCarReminders(p=>p.map(r=>r.id===id?{...r,lastDone:today.toISOString().slice(0,10)}:r));
+
+  const addHouse=()=>{if(!newHouse.title.trim())return;setHouseItems(p=>[...p,{...newHouse,id:Date.now(),lastDone:""}]);setNewHouse({title:"",icon:"🏠",intervalMonths:12,cat:"Inomhus",notes:"",lastDone:""});};
+  const delHouse=id=>setHouseItems(p=>p.filter(r=>r.id!==id));
+  const doneHouseNow=id=>setHouseItems(p=>p.map(r=>r.id===id?{...r,lastDone:today.toISOString().slice(0,10)}:r));
+
+  const daysUntilMonth=(m)=>{const t=new Date(today.getFullYear(),m-1,1);if(t<today)t.setFullYear(today.getFullYear()+1);return Math.round((t-today)/(1000*60*60*24));};
+  const houseOverdue=(item)=>{if(!item.lastDone)return true;const last=new Date(item.lastDone);const next=new Date(last);next.setMonth(next.getMonth()+item.intervalMonths);return next<=today;};
+  const houseNextDate=(item)=>{if(!item.lastDone)return"Aldrig gjort";const last=new Date(item.lastDone);const next=new Date(last);next.setMonth(next.getMonth()+item.intervalMonths);return next.toLocaleDateString("sv-SE",{year:"numeric",month:"short",day:"numeric"});};
+
+  const sortedCar=[...carReminders].sort((a,b)=>daysUntilMonth(a.month)-daysUntilMonth(b.month));
+  const sortedHouse=[...houseItems].sort((a,b)=>(houseOverdue(a)?-1:1)-(houseOverdue(b)?-1:1));
+
+  return <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
+    {/* Sub-nav */}
+    <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,flexShrink:0,padding:"0 12px"}}>
+      {[["car","🚗 Bil"],["house","🏠 Hus"]].map(([id,label])=>(
+        <button key={id} onClick={()=>setView(id)} style={{padding:"8px 16px",border:"none",borderBottom:`2.5px solid ${view===id?T.amber:"transparent"}`,background:"transparent",color:view===id?T.amber:T.textDim,fontSize:11,fontWeight:view===id?700:400,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>{label}</button>
+      ))}
+    </div>
+
+    <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
+      {/* ── BIL ── */}
+      {view==="car"&&<>
+        {/* Snabbmallar */}
+        <div style={{marginBottom:12}}>
+          <p style={{fontSize:9,fontWeight:700,color:T.textDim,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Snabblägg till</p>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {CAR_TEMPLATES.map(t=><button key={t.title} onClick={()=>setCarReminders(p=>[...p,{...t,id:Date.now()}])} style={{padding:"4px 10px",borderRadius:999,border:`1px solid ${T.border}`,background:T.surface,color:T.textMid,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>{t.icon} {t.title}</button>)}
+          </div>
+        </div>
+        {/* Ny påminnelse */}
+        <div style={{background:T.card,borderRadius:12,border:`1.5px solid ${T.amber}`,padding:"10px 12px",marginBottom:12}}>
+          <p style={{fontSize:10,fontWeight:700,color:T.amber,marginBottom:8}}>➕ Ny bilpåminnelse</p>
+          <div style={{display:"flex",gap:5,marginBottom:6}}>
+            <input value={newCar.icon} onChange={e=>setNewCar(p=>({...p,icon:e.target.value}))} style={{width:36,padding:"5px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:16,textAlign:"center",fontFamily:"inherit",outline:"none"}}/>
+            <input value={newCar.title} onChange={e=>setNewCar(p=>({...p,title:e.target.value}))} placeholder="Vad ska göras?" style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+            <select value={newCar.month} onChange={e=>setNewCar(p=>({...p,month:Number(e.target.value)}))} style={{padding:"5px 7px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit"}}>
+              {MONTH_SV.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}
+            </select>
+          </div>
+          <button onClick={addCar} style={{width:"100%",padding:"6px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Lägg till</button>
+        </div>
+        {sortedCar.length===0&&<div style={{textAlign:"center",padding:20,color:T.textDim,fontSize:11}}>Inga bilpåminnelser. Lägg till ovan.</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {sortedCar.map(r=>{const days=daysUntilMonth(r.month);const soon=days<30;const veryClose=days<7;return <div key={r.id} style={{background:T.card,borderRadius:10,border:`1.5px solid ${veryClose?T.red:soon?T.amber:T.border}`,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:22}}>{r.icon}</span>
+            <div style={{flex:1}}>
+              <p style={{fontSize:12,fontWeight:700,color:T.text}}>{r.title}</p>
+              <p style={{fontSize:10,color:soon?T.amber:T.textDim}}>{MONTH_SV[r.month-1]} — om {days} dagar</p>
+              {r.lastDone&&<p style={{fontSize:9,color:T.textDim}}>Senast: {r.lastDone}</p>}
+            </div>
+            <button onClick={()=>doneCarNow(r.id)} style={{padding:"4px 9px",borderRadius:7,border:`1px solid ${T.green}`,background:T.greenBg,color:T.green,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ Klar</button>
+            <button onClick={()=>delCar(r.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:12}}>🗑</button>
+          </div>;})}
+        </div>
+      </>}
+
+      {/* ── HUS ── */}
+      {view==="house"&&<>
+        {/* Snabbmallar */}
+        <div style={{marginBottom:12}}>
+          <p style={{fontSize:9,fontWeight:700,color:T.textDim,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Snabblägg till</p>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {HOUSE_TEMPLATES.map(t=><button key={t.title} onClick={()=>setHouseItems(p=>[...p,{...t,id:Date.now(),lastDone:""}])} style={{padding:"4px 10px",borderRadius:999,border:`1px solid ${T.border}`,background:T.surface,color:T.textMid,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>{t.icon} {t.title}</button>)}
+          </div>
+        </div>
+        {/* Ny post */}
+        <div style={{background:T.card,borderRadius:12,border:`1.5px solid ${T.amber}`,padding:"10px 12px",marginBottom:12}}>
+          <p style={{fontSize:10,fontWeight:700,color:T.amber,marginBottom:8}}>➕ Ny underhållspost</p>
+          <div style={{display:"flex",gap:5,marginBottom:6}}>
+            <input value={newHouse.icon} onChange={e=>setNewHouse(p=>({...p,icon:e.target.value}))} style={{width:36,padding:"5px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:16,textAlign:"center",fontFamily:"inherit",outline:"none"}}/>
+            <input value={newHouse.title} onChange={e=>setNewHouse(p=>({...p,title:e.target.value}))} placeholder="Vad ska göras?" style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+          </div>
+          <div style={{display:"flex",gap:5,marginBottom:6}}>
+            <select value={newHouse.cat} onChange={e=>setNewHouse(p=>({...p,cat:e.target.value}))} style={{flex:1,padding:"5px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:10,fontFamily:"inherit"}}>
+              {HOUSE_CATS.map(c=><option key={c}>{c}</option>)}
+            </select>
+            <select value={newHouse.intervalMonths} onChange={e=>setNewHouse(p=>({...p,intervalMonths:Number(e.target.value)}))} style={{flex:1,padding:"5px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:10,fontFamily:"inherit"}}>
+              {[[1,"Varje månad"],[3,"Var 3:e månad"],[6,"Var 6:e månad"],[12,"Varje år"],[24,"Vartannat år"],[60,"Vart 5:e år"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <button onClick={addHouse} style={{width:"100%",padding:"6px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Lägg till</button>
+        </div>
+        {sortedHouse.length===0&&<div style={{textAlign:"center",padding:20,color:T.textDim,fontSize:11}}>Inga underhållsposter. Lägg till ovan.</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {sortedHouse.map(r=>{const overdue=houseOverdue(r);const next=houseNextDate(r);return <div key={r.id} style={{background:T.card,borderRadius:10,border:`1.5px solid ${overdue?T.red:T.border}`,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:22}}>{r.icon}</span>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:2}}>
+                <p style={{fontSize:12,fontWeight:700,color:T.text}}>{r.title}</p>
+                <span style={{fontSize:8,padding:"1px 5px",borderRadius:999,background:overdue?T.redBg:T.greenBg,color:overdue?T.red:T.green,fontWeight:700}}>{r.cat}</span>
+              </div>
+              <p style={{fontSize:10,color:overdue?T.red:T.textDim}}>{overdue?"⚠️ Förfallet!":""} Nästa: {next}</p>
+              {r.lastDone&&<p style={{fontSize:9,color:T.textDim}}>Senast: {r.lastDone}</p>}
+            </div>
+            <button onClick={()=>doneHouseNow(r.id)} style={{padding:"4px 9px",borderRadius:7,border:`1px solid ${T.green}`,background:T.greenBg,color:T.green,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ Klar</button>
+            <button onClick={()=>delHouse(r.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:12}}>🗑</button>
+          </div>;})}
+        </div>
+      </>}
+    </div>
+  </div>;
+}
+
+/* ═══ EKONOMI ═══════════════════════════════════════════════════ */
+const EXPENSE_CATS=["Boende","Mat","Transport","Nöje","Kläder","Hälsa","Övrigt"];
+const SPARTIPS=[
+  "Byt till LED-lampor — sparar ~600 kr/år","Handla med inköpslista och minska matsvinnet",
+  "Jämför försäkringar en gång per år","Pausa prenumerationer du inte använder",
+  "Sätt av 10% av lönen automatiskt första dagen","Köp vinterkläder på sommarsea och tvärtom",
+  "Byt till ett rörligt elavtal om spotpriset är lågt","Planera veckomenyn och handla en gång per vecka",
+  "Säg upp gymkort om du inte går dit","Laga mat hemma istället för takeaway tre kvällar/vecka",
+];
+function EkonomiTab({T,budget,setBudget}){
+  const now=new Date();
+  const [view,setView]=useState("budget"); // budget|kalender|tips
+  const [month,setMonth]=useState(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`);
+  const [showForm,setShowForm]=useState(false);
+  const [form,setForm]=useState({label:"",amount:"",cat:EXPENSE_CATS[0],type:"expense",day:now.getDate()});
+
+  const entries=budget.filter(e=>e.month===month);
+  const income=entries.filter(e=>e.type==="income").reduce((s,e)=>s+e.amount,0);
+  const expenses=entries.filter(e=>e.type==="expense").reduce((s,e)=>s+e.amount,0);
+  const balance=income-expenses;
+  const tip=SPARTIPS[now.getDate()%SPARTIPS.length];
+
+  function addEntry(){
+    if(!form.label.trim()||!form.amount)return;
+    setBudget(p=>[...p,{id:Date.now(),month,label:form.label.trim(),amount:Number(form.amount),cat:form.cat,type:form.type,day:Number(form.day)}]);
+    setForm(f=>({...f,label:"",amount:""}));
+    setShowForm(false);
+  }
+  function delEntry(id){setBudget(p=>p.filter(e=>e.id!==id));}
+
+  const catTotals=EXPENSE_CATS.map(c=>({cat:c,total:entries.filter(e=>e.cat===c&&e.type==="expense").reduce((s,e)=>s+e.amount,0)})).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
+  const upcoming=budget.filter(e=>e.type==="expense"&&e.day>=now.getDate()&&e.month===month).sort((a,b)=>a.day-b.day).slice(0,5);
+
+  const btnStyle=(active)=>({padding:"6px 14px",borderRadius:20,border:`1.5px solid ${active?T.amber:T.border}`,background:active?T.amberBg:"transparent",color:active?T.amber:T.textMid,fontSize:11,fontWeight:active?700:400,cursor:"pointer",fontFamily:"inherit"});
+  const inputS={padding:"7px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"};
+
+  return <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:5}}>
+        {[["budget","💰 Budget"],["kalender","📅 Kommande"],["tips","💡 Spartips"]].map(([id,lbl])=>(
+          <button key={id} onClick={()=>setView(id)} style={btnStyle(view===id)}>{lbl}</button>
+        ))}
+      </div>
+      <input type="month" value={month} onChange={e=>setMonth(e.target.value)} style={{...inputS,marginLeft:"auto"}}/>
+    </div>
+
+    {/* Budget view */}
+    {view==="budget"&&<>
+      {/* Summary cards */}
+      <div style={{display:"flex",gap:10}}>
+        {[{lbl:"Inkomst",val:income,c:"#27ae60",bg:"#e9f7ef"},{lbl:"Utgifter",val:expenses,c:"#e74c3c",bg:"#fdecea"},{lbl:"Balans",val:balance,c:balance>=0?"#27ae60":"#e74c3c",bg:balance>=0?"#e9f7ef":"#fdecea"}].map(({lbl,val,c,bg})=>(
+          <div key={lbl} style={{flex:1,background:bg,borderRadius:10,padding:"10px 12px",border:`1px solid ${c}33`}}>
+            <p style={{fontSize:9,color:c,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",margin:"0 0 2px"}}>{lbl}</p>
+            <p style={{fontSize:18,fontWeight:700,color:c,margin:0}}>{val.toLocaleString("sv-SE")} kr</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Category breakdown */}
+      {catTotals.length>0&&<div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,padding:"10px 12px"}}>
+        <p style={{fontSize:9,color:T.textDim,letterSpacing:1.3,textTransform:"uppercase",margin:"0 0 8px"}}>Kategorifördelning</p>
+        {catTotals.map(({cat,total})=>(
+          <div key={cat} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <span style={{fontSize:10,color:T.text,width:80,flexShrink:0}}>{cat}</span>
+            <div style={{flex:1,background:T.border,borderRadius:4,height:6,overflow:"hidden"}}>
+              <div style={{height:"100%",borderRadius:4,background:T.amber,width:`${Math.min(100,(total/Math.max(expenses,1))*100)}%`,transition:"width .3s"}}/>
+            </div>
+            <span style={{fontSize:10,color:T.textMid,width:70,textAlign:"right"}}>{total.toLocaleString("sv-SE")} kr</span>
+          </div>
+        ))}
+      </div>}
+
+      {/* Entries list */}
+      <div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",padding:"8px 12px",borderBottom:`1px solid ${T.border}`}}>
+          <span style={{fontSize:11,fontWeight:700,color:T.text,flex:1}}>Transaktioner</span>
+          <button onClick={()=>setShowForm(f=>!f)} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${T.amber}`,background:T.amberBg,color:T.amber,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Lägg till</button>
+        </div>
+        {showForm&&<div style={{padding:"10px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <input value={form.label} onChange={e=>setForm(f=>({...f,label:e.target.value}))} placeholder="Beskrivning" style={{...inputS,flex:2,minWidth:120}}/>
+            <input value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="Belopp kr" type="number" min="0" style={{...inputS,flex:1,minWidth:80}}/>
+            <input value={form.day} onChange={e=>setForm(f=>({...f,day:e.target.value}))} placeholder="Dag" type="number" min="1" max="31" style={{...inputS,width:60}}/>
+          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <select value={form.cat} onChange={e=>setForm(f=>({...f,cat:e.target.value}))} style={{...inputS,flex:1}}>
+              {EXPENSE_CATS.map(c=><option key={c}>{c}</option>)}
+            </select>
+            <select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} style={{...inputS,flex:1}}>
+              <option value="expense">Utgift</option>
+              <option value="income">Inkomst</option>
+            </select>
+            <button onClick={addEntry} style={{padding:"7px 14px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Spara</button>
+          </div>
+        </div>}
+        {entries.length===0&&<p style={{padding:"14px",fontSize:11,color:T.textDim,textAlign:"center"}}>Inga transaktioner för {month}. Lägg till ovan.</p>}
+        {entries.sort((a,b)=>b.day-a.day).map(e=>(
+          <div key={e.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${T.border}`}}>
+            <span style={{fontSize:10,color:T.textDim,width:24,textAlign:"center"}}>{e.day}</span>
+            <span style={{flex:1,fontSize:11,color:T.text}}>{e.label}</span>
+            <span style={{fontSize:9,padding:"1px 7px",borderRadius:999,background:T.surface,color:T.textDim}}>{e.cat}</span>
+            <span style={{fontSize:11,fontWeight:700,color:e.type==="income"?"#27ae60":"#e74c3c",width:80,textAlign:"right"}}>{e.type==="income"?"+":"-"}{e.amount.toLocaleString("sv-SE")} kr</span>
+            <button onClick={()=>delEntry(e.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:13}}>✕</button>
+          </div>
+        ))}
+      </div>
+    </>}
+
+    {/* Kommande view */}
+    {view==="kalender"&&<div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,overflow:"hidden"}}>
+      <p style={{padding:"10px 12px",fontSize:9,color:T.textDim,letterSpacing:1.3,textTransform:"uppercase",margin:0,borderBottom:`1px solid ${T.border}`}}>Kommande betalningar denna månad</p>
+      {upcoming.length===0?<p style={{padding:"14px",fontSize:11,color:T.textDim,textAlign:"center"}}>Inga kommande utgifter registrerade.</p>:upcoming.map(e=>(
+        <div key={e.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderBottom:`1px solid ${T.border}`}}>
+          <div style={{width:32,height:32,borderRadius:8,background:T.amberBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:12,fontWeight:700,color:T.amber}}>{e.day}</span>
+          </div>
+          <div style={{flex:1}}><p style={{fontSize:11,color:T.text,fontWeight:600,margin:0}}>{e.label}</p><p style={{fontSize:9,color:T.textDim,margin:0}}>{e.cat}</p></div>
+          <span style={{fontSize:12,fontWeight:700,color:"#e74c3c"}}>{e.amount.toLocaleString("sv-SE")} kr</span>
+        </div>
+      ))}
+    </div>}
+
+    {/* Spartips view */}
+    {view==="tips"&&<>
+      <div style={{background:"#fffbea",borderRadius:12,border:"1px solid #f0d060",padding:"14px 16px",marginBottom:4}}>
+        <p style={{fontSize:9,color:"#b8860b",fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",margin:"0 0 4px"}}>💡 Dagens tips</p>
+        <p style={{fontSize:13,color:"#5A4E3C",fontWeight:600,margin:0,lineHeight:1.5}}>{tip}</p>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {SPARTIPS.map((t,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:9,background:T.card,border:`1px solid ${T.border}`}}>
+            <span style={{fontSize:14,flexShrink:0}}>💡</span>
+            <p style={{fontSize:11,color:T.text,margin:0,lineHeight:1.5}}>{t}</p>
+          </div>
+        ))}
+      </div>
+    </>}
+  </div>;
+}
+
+/* ═══ LISTOR (BUCKETLIST + SOMMARLOV) ═══════════════════════════ */
+const BUCKET_CATS=["Resa","Upplevelse","Lära sig","Äventyr","Mat & dryck","Övrigt"];
+const SOMMAR_DEFAULTS=[
+  {title:"Bada i sjö",cat:"Natur",done:false},{title:"Grilla på stranden",cat:"Mat",done:false},
+  {title:"Besök ett museum",cat:"Stad",done:false},{title:"Bygg sandslott",cat:"Vattenlek",done:false},
+  {title:"Campa under stjärnorna",cat:"Äventyr",done:false},{title:"Plocka bär i skogen",cat:"Natur",done:false},
+  {title:"Gör glass hemma",cat:"Mat",done:false},{title:"Cykla en ny stig",cat:"Äventyr",done:false},
+  {title:"Besök ett zoo",cat:"Stad",done:false},{title:"Vattenballong-krig",cat:"Vattenlek",done:false},
+  {title:"Måla/rita utomhus",cat:"Kreativt",done:false},{title:"Fiska",cat:"Natur",done:false},
+  {title:"Laga pizza från grunden",cat:"Mat",done:false},{title:"Bygga kojor",cat:"Äventyr",done:false},
+  {title:"Solnedgångspromenad",cat:"Natur",done:false},
+];
+const SOMMAR_CATS=["Alla","Natur","Äventyr","Stad","Vattenlek","Mat","Kreativt"];
+function ListorTab({T,bucketList,setBucketList,sommarList,setSommarList}){
+  const [view,setView]=useState("bucket"); // bucket|sommar
+  const [newBucket,setNewBucket]=useState({title:"",cat:BUCKET_CATS[0],who:""});
+  const [newSommar,setNewSommar]=useState({title:"",cat:SOMMAR_CATS[1]});
+  const [sommarFilter,setSommarFilter]=useState("Alla");
+
+  const bucketDone=bucketList.filter(i=>i.done).length;
+  const sommarDone=sommarList.filter(i=>i.done).length;
+  const filteredSommar=sommarFilter==="Alla"?sommarList:sommarList.filter(i=>i.cat===sommarFilter);
+
+  function addBucket(){
+    if(!newBucket.title.trim())return;
+    setBucketList(p=>[...p,{id:Date.now(),...newBucket,done:false,addedAt:Date.now()}]);
+    setNewBucket(b=>({...b,title:"",who:""}));
+  }
+  function addSommar(){
+    if(!newSommar.title.trim())return;
+    setSommarList(p=>[...p,{id:Date.now(),...newSommar,done:false}]);
+    setNewSommar(s=>({...s,title:""}));
+  }
+
+  const btnStyle=(active)=>({padding:"6px 14px",borderRadius:20,border:`1.5px solid ${active?T.amber:T.border}`,background:active?T.amberBg:"transparent",color:active?T.amber:T.textMid,fontSize:11,fontWeight:active?700:400,cursor:"pointer",fontFamily:"inherit"});
+  const inputS={padding:"7px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"};
+
+  return <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",gap:6}}>
+      <button onClick={()=>setView("bucket")} style={btnStyle(view==="bucket")}>🪣 Bucketlist ({bucketDone}/{bucketList.length})</button>
+      <button onClick={()=>setView("sommar")} style={btnStyle(view==="sommar")}>☀️ Sommarlov ({sommarDone}/{sommarList.length})</button>
+    </div>
+
+    {view==="bucket"&&<>
+      {/* Progress */}
+      {bucketList.length>0&&<div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,padding:"10px 14px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+          <span style={{fontSize:10,fontWeight:700,color:T.text}}>Familjensbucketlist</span>
+          <span style={{fontSize:10,color:T.textDim}}>{bucketDone} av {bucketList.length} klara</span>
+        </div>
+        <div style={{background:T.border,borderRadius:4,height:6,overflow:"hidden"}}>
+          <div style={{height:"100%",borderRadius:4,background:"linear-gradient(90deg,#6B4EA8,#a880e0)",width:`${bucketList.length?bucketDone/bucketList.length*100:0}%`,transition:"width .4s"}}/>
+        </div>
+      </div>}
+      {/* Add form */}
+      <div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,padding:"10px 12px",display:"flex",gap:5,flexWrap:"wrap"}}>
+        <input value={newBucket.title} onChange={e=>setNewBucket(b=>({...b,title:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addBucket()} placeholder="Lägg till drömupplevelse…" style={{...inputS,flex:3,minWidth:150}}/>
+        <input value={newBucket.who} onChange={e=>setNewBucket(b=>({...b,who:e.target.value}))} placeholder="Vem?" style={{...inputS,flex:1,minWidth:70}}/>
+        <select value={newBucket.cat} onChange={e=>setNewBucket(b=>({...b,cat:e.target.value}))} style={{...inputS,flex:1,minWidth:90}}>
+          {BUCKET_CATS.map(c=><option key={c}>{c}</option>)}
+        </select>
+        <button onClick={addBucket} style={{padding:"7px 14px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>+ Lägg till</button>
+      </div>
+      {/* List */}
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {bucketList.length===0&&<p style={{fontSize:11,color:T.textDim,textAlign:"center",padding:"20px 0"}}>Inga drömmar ännu — lägg till er första bucketlist-upplevelse!</p>}
+        {bucketList.map(item=>(
+          <div key={item.id} onClick={()=>setBucketList(p=>p.map(i=>i.id===item.id?{...i,done:!i.done,doneAt:!i.done?Date.now():null}:i))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:item.done?"#f0f7f0":T.card,border:`1px solid ${item.done?"#b2dfdb":T.border}`,cursor:"pointer",opacity:item.done?0.7:1,transition:"all .2s"}}>
+            <div style={{width:22,height:22,borderRadius:"50%",border:`2.5px solid ${item.done?"#27ae60":"#9B84D8"}`,background:item.done?"#27ae60":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              {item.done&&<span style={{color:"#fff",fontSize:11,fontWeight:700}}>✓</span>}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontSize:12,color:T.text,fontWeight:600,margin:0,textDecoration:item.done?"line-through":"none"}}>{item.title}</p>
+              <div style={{display:"flex",gap:6,marginTop:2}}>
+                <span style={{fontSize:9,padding:"1px 6px",borderRadius:999,background:"#9B84D818",color:"#6B4EA8",fontWeight:600}}>{item.cat}</span>
+                {item.who&&<span style={{fontSize:9,color:T.textDim}}>{item.who}</span>}
+                {item.done&&item.doneAt&&<span style={{fontSize:9,color:"#27ae60"}}>✓ {new Date(item.doneAt).toLocaleDateString("sv-SE")}</span>}
+              </div>
+            </div>
+            <button onClick={e=>{e.stopPropagation();setBucketList(p=>p.filter(i=>i.id!==item.id));}} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:14,flexShrink:0}}>✕</button>
+          </div>
+        ))}
+      </div>
+    </>}
+
+    {view==="sommar"&&<>
+      {/* Progress */}
+      <div style={{background:"linear-gradient(135deg,#fff8e1,#fffde7)",borderRadius:12,border:"1px solid #ffe082",padding:"12px 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <div><p style={{fontSize:13,fontWeight:700,color:"#e65100",margin:0}}>☀️ Sommarlovslistan {new Date().getFullYear()}</p><p style={{fontSize:10,color:"#bf360c",margin:"2px 0 0"}}>Bocka av allt kul ni gör!</p></div>
+          <div style={{textAlign:"right"}}><p style={{fontSize:22,fontWeight:700,color:"#e65100",margin:0}}>{sommarDone}/{sommarList.length}</p><p style={{fontSize:9,color:"#bf360c",margin:0}}>klara</p></div>
+        </div>
+        <div style={{background:"#ffcc80",borderRadius:4,height:7,overflow:"hidden"}}>
+          <div style={{height:"100%",borderRadius:4,background:"linear-gradient(90deg,#ff8f00,#ffca28)",width:`${sommarList.length?sommarDone/sommarList.length*100:0}%`,transition:"width .4s"}}/>
+        </div>
+      </div>
+      {/* Category filter */}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        {SOMMAR_CATS.map(c=><button key={c} onClick={()=>setSommarFilter(c)} style={{padding:"4px 10px",borderRadius:999,border:`1.5px solid ${sommarFilter===c?"#e65100":T.border}`,background:sommarFilter===c?"#fff3e0":"transparent",color:sommarFilter===c?"#e65100":T.textDim,fontSize:10,fontWeight:sommarFilter===c?700:400,cursor:"pointer",fontFamily:"inherit"}}>{c}</button>)}
+      </div>
+      {/* Add custom */}
+      <div style={{display:"flex",gap:5}}>
+        <input value={newSommar.title} onChange={e=>setNewSommar(s=>({...s,title:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addSommar()} placeholder="Lägg till sommaraktivitet…" style={{...inputS,flex:3}}/>
+        <select value={newSommar.cat} onChange={e=>setNewSommar(s=>({...s,cat:e.target.value}))} style={{...inputS,flex:1}}>
+          {SOMMAR_CATS.filter(c=>c!=="Alla").map(c=><option key={c}>{c}</option>)}
+        </select>
+        <button onClick={addSommar} style={{padding:"7px 12px",borderRadius:8,border:"none",background:"#ff8f00",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>+</button>
+      </div>
+      {/* List */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {filteredSommar.map(item=>(
+          <div key={item.id} onClick={()=>setSommarList(p=>p.map(i=>i.id===item.id?{...i,done:!i.done}:i))} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 11px",borderRadius:9,background:item.done?"#fff8e1":T.card,border:`1px solid ${item.done?"#ffe082":T.border}`,cursor:"pointer",transition:"all .2s"}}>
+            <span style={{fontSize:18,flexShrink:0}}>{item.done?"✅":"⬜"}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontSize:11,color:T.text,fontWeight:600,margin:0,textDecoration:item.done?"line-through":"none"}}>{item.title}</p>
+              <span style={{fontSize:9,color:"#e65100"}}>{item.cat}</span>
+            </div>
+          </div>
+        ))}
+        {filteredSommar.length===0&&<p style={{fontSize:11,color:T.textDim,gridColumn:"span 2",textAlign:"center",padding:"16px 0"}}>Inga aktiviteter i denna kategori.</p>}
+      </div>
+    </>}
+  </div>;
+}
+
+/* ═══ FAMILJEASSISTENTEN ════════════════════════════════════════ */
+function FamiljeAssistentTab({T,tasks,flowMeds,family}){
+  const [calEvents]=useLocalStorage("fp_calevents",[]);
+  const now=new Date();
+  const todayStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  const hour=now.getHours();
+  const [view,setView]=useState("rapport"); // rapport|ai
+  const [aiKey,setAiKey]=useLocalStorage("fp_ai_key","");
+  const [aiInput,setAiInput]=useState("");
+  const [aiResult,setAiResult]=useState("");
+  const [aiLoading,setAiLoading]=useState(false);
+  const [aiError,setAiError]=useState(null);
+  const [showKey,setShowKey]=useState(false);
+
+  // Morning or evening?
+  const isEvening=hour>=16;
+  const greeting=hour<10?"God morgon":hour<12?"God förmiddag":hour<17?"God eftermiddag":"God kväll";
+
+  // Today's events from calEvents
+  const todayEvents=(calEvents||[]).filter(e=>e.date===todayStr).sort((a,b)=>a.time?.localeCompare(b.time||""));
+
+  // Active tasks
+  const openTasks=(tasks||[]).filter(t=>t.lane!=="done");
+  const doneTasks=(tasks||[]).filter(t=>t.lane==="done");
+
+  // Today's medicines
+  const allMeds=Object.values(flowMeds||{}).flat();
+  const medsTotal=allMeds.length;
+  const medsDone=allMeds.filter(m=>m.done).length;
+
+  // Tip of the day
+  const TIPS=["Sätt av 15 minuter för att planera kvällen ihop","Fråga barnen vad de bästa och sämsta med dagen var","Ring en vän eller släkting du inte hört från ett tag","Gå en kvällspromenad tillsammans","Läs en bok istället för mobilen innan läggdags"];
+  const tip=TIPS[now.getDate()%TIPS.length];
+
+  async function summarize(){
+    if(!aiKey.trim()||!aiInput.trim())return;
+    setAiLoading(true);setAiError(null);setAiResult("");
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":aiKey,"anthropic-version":"2023-06-01"},
+        body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:512,messages:[{role:"user",content:`Sammanfatta följande text/e-post på svenska i 3-5 meningar. Lyft fram viktiga åtgärdspunkter och datum:\n\n${aiInput}`}]})
+      });
+      if(!res.ok)throw new Error(`API-fel ${res.status}`);
+      const data=await res.json();
+      setAiResult(data.content?.[0]?.text||"Inget svar");
+    }catch(e){setAiError(e.message);}
+    setAiLoading(false);
+  }
+
+  const btnStyle=(active)=>({padding:"6px 14px",borderRadius:20,border:`1.5px solid ${active?T.amber:T.border}`,background:active?T.amberBg:"transparent",color:active?T.amber:T.textMid,fontSize:11,fontWeight:active?700:400,cursor:"pointer",fontFamily:"inherit"});
+  const cardS={background:T.card,borderRadius:12,border:`1px solid ${T.border}`,padding:"12px 14px"};
+  const sectionLbl={fontSize:9,color:T.textDim,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",margin:"0 0 8px"};
+
+  return <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:12,maxWidth:760,margin:"0 auto",width:"100%"}}>
+    <div style={{display:"flex",gap:6}}>
+      <button onClick={()=>setView("rapport")} style={btnStyle(view==="rapport")}>📊 Dagsrapport</button>
+      <button onClick={()=>setView("ai")} style={btnStyle(view==="ai")}>🤖 AI-assistent</button>
+    </div>
+
+    {view==="rapport"&&<>
+      {/* Greeting card */}
+      <div style={{background:`linear-gradient(135deg,${isEvening?"#1a1a2e,#16213e":"#6B4EA8,#9B84D8"})`,borderRadius:14,padding:"16px 20px",color:"#fff"}}>
+        <p style={{fontSize:9,opacity:0.7,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",margin:"0 0 4px"}}>{new Date().toLocaleDateString("sv-SE",{weekday:"long",day:"numeric",month:"long"})}</p>
+        <p style={{fontSize:22,fontWeight:700,margin:"0 0 6px"}}>{greeting}, {family?.name||"Familjen"}! {isEvening?"🌙":"☀️"}</p>
+        <p style={{fontSize:12,opacity:0.85,margin:0,lineHeight:1.6}}>{isEvening?"Här är en sammanfattning av er dag.":"Här är vad som händer idag."}</p>
+      </div>
+
+      {/* Stats row */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+        {[
+          {icon:"📋",lbl:"Öppna tasks",val:openTasks.length,sub:`${doneTasks.length} klara`},
+          {icon:"💊",lbl:"Mediciner",val:`${medsDone}/${medsTotal}`,sub:"tagits idag"},
+          {icon:"📅",lbl:"Händelser",val:todayEvents.length,sub:"idag"},
+        ].map(({icon,lbl,val,sub})=>(
+          <div key={lbl} style={{...cardS,textAlign:"center"}}>
+            <p style={{fontSize:20,margin:"0 0 4px"}}>{icon}</p>
+            <p style={{fontSize:18,fontWeight:700,color:T.text,margin:"0 0 2px"}}>{val}</p>
+            <p style={{fontSize:9,color:T.textDim,margin:0}}>{lbl}</p>
+            <p style={{fontSize:9,color:T.textDim,margin:0}}>{sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Today's events */}
+      {todayEvents.length>0&&<div style={cardS}>
+        <p style={sectionLbl}>📅 Idag</p>
+        {todayEvents.map((e,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:i<todayEvents.length-1?`1px solid ${T.border}`:"none"}}>
+            {e.time&&<span style={{fontSize:10,color:T.amber,fontWeight:700,width:36,flexShrink:0}}>{e.time}</span>}
+            <span style={{fontSize:14,flexShrink:0}}>{e.icon||"📅"}</span>
+            <div style={{flex:1}}><p style={{fontSize:11,color:T.text,fontWeight:600,margin:0}}>{e.title}</p>{e.who&&<p style={{fontSize:9,color:T.textDim,margin:0}}>{e.who}</p>}</div>
+          </div>
+        ))}
+      </div>}
+
+      {/* Open tasks */}
+      {openTasks.length>0&&<div style={cardS}>
+        <p style={sectionLbl}>📋 Att göra</p>
+        {openTasks.slice(0,5).map(t=>(
+          <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`}}>
+            <span style={{fontSize:10,padding:"1px 6px",borderRadius:999,background:t.prio==="urgent"?"#fdecea":t.prio==="high"?"#fff3e0":T.surface,color:t.prio==="urgent"?"#c0392b":t.prio==="high"?"#d68a00":T.textDim,fontWeight:700}}>{t.prio==="urgent"?"🔴":t.prio==="high"?"🟡":"🔵"}</span>
+            <p style={{fontSize:11,color:T.text,flex:1,margin:0}}>{t.title}</p>
+            <span style={{fontSize:9,color:T.textDim}}>{t.lane==="progress"?"Pågår":"Klar att starta"}</span>
+          </div>
+        ))}
+        {openTasks.length>5&&<p style={{fontSize:10,color:T.textDim,margin:"6px 0 0",textAlign:"center"}}>+{openTasks.length-5} till…</p>}
+      </div>}
+
+      {/* Tip */}
+      <div style={{background:"#fffbea",borderRadius:10,border:"1px solid #ffe082",padding:"10px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
+        <span style={{fontSize:18,flexShrink:0}}>💡</span>
+        <div><p style={{fontSize:9,color:"#b8860b",fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",margin:"0 0 3px"}}>Dagens tips</p><p style={{fontSize:11,color:"#5A4E3C",margin:0,lineHeight:1.5}}>{tip}</p></div>
+      </div>
+    </>}
+
+    {view==="ai"&&<>
+      {/* API key */}
+      <div style={cardS}>
+        <p style={sectionLbl}>🔑 Claude API-nyckel</p>
+        <div style={{display:"flex",gap:6}}>
+          <input type={showKey?"text":"password"} value={aiKey} onChange={e=>setAiKey(e.target.value)} placeholder="sk-ant-…" style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+          <button onClick={()=>setShowKey(s=>!s)} style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:"transparent",cursor:"pointer",fontSize:13}}>{showKey?"🙈":"👁️"}</button>
+        </div>
+        <p style={{fontSize:9,color:T.textDim,margin:"5px 0 0"}}>Nyckeln sparas lokalt i webbläsaren. Skaffa på console.anthropic.com.</p>
+      </div>
+
+      {/* Text input */}
+      <div style={cardS}>
+        <p style={sectionLbl}>📧 Klistra in e-post eller text att sammanfatta</p>
+        <textarea value={aiInput} onChange={e=>setAiInput(e.target.value)} placeholder="Klistra in e-posttext, mötesanteckningar eller annan text här…" rows={7} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+        <button onClick={summarize} disabled={aiLoading||!aiKey.trim()||!aiInput.trim()} style={{width:"100%",marginTop:8,padding:"9px",borderRadius:9,border:"none",background:aiLoading||!aiKey.trim()||!aiInput.trim()?"#ccc":"linear-gradient(135deg,#667eea,#764ba2)",color:"#fff",fontWeight:700,fontSize:12,cursor:aiLoading?"default":"pointer",fontFamily:"inherit"}}>
+          {aiLoading?"Sammanfattar…":"🤖 Sammanfatta med Claude"}
+        </button>
+        {aiError&&<p style={{fontSize:11,color:"#c0392b",marginTop:6}}>{aiError}</p>}
+      </div>
+
+      {/* Result */}
+      {aiResult&&<div style={{...cardS,background:"linear-gradient(135deg,#f8f4ff,#ede8ff)",border:"1px solid #9B84D8"}}>
+        <p style={{...sectionLbl,color:"#6B4EA8"}}>✨ Sammanfattning</p>
+        <p style={{fontSize:12,color:"#3a2c5a",lineHeight:1.7,margin:0,whiteSpace:"pre-wrap"}}>{aiResult}</p>
+      </div>}
+
+      {/* Usage info */}
+      <div style={{...cardS,background:T.surface}}>
+        <p style={{...sectionLbl}}>🛠️ Vad kan assistenten göra?</p>
+        {["Sammanfatta långa e-postkedjor på svenska","Extrahera åtgärdspunkter och datum från text","Förkorta mötesprotokoll till bullet points","Förklara komplex text enkelt för hela familjen"].map((t,i)=>(
+          <div key={i} style={{display:"flex",gap:8,padding:"5px 0",borderBottom:i<3?`1px solid ${T.border}`:"none"}}>
+            <span style={{fontSize:12,flexShrink:0}}>•</span>
+            <p style={{fontSize:11,color:T.text,margin:0}}>{t}</p>
+          </div>
+        ))}
+      </div>
+    </>}
+  </div>;
+}
+
 /* ═══ MAIN APP ══════════════════════════════════════════════════ */
 export default function App(){
   const now=useClock();
@@ -1312,17 +2326,31 @@ export default function App(){
   const gcal=useGoogleCalendar(gcalClientId);
   const [choresDone,setChoresDone]=useLocalStorage("fp_chores_done",{});
   const [choresList,setChoresList]=useLocalStorage("fp_chores_list",null); // null = använd CHORES_LIST från constants
+  const [templates,setTemplates]=useLocalStorage("fp_templates",DEFAULT_TEMPLATES);
+  const [epics,setEpics]=useLocalStorage("fp_epics",[]);
+  const [carReminders,setCarReminders]=useLocalStorage("fp_car",[]);
+  const [houseItems,setHouseItems]=useLocalStorage("fp_house",[]);
+  const [budget,setBudget]=useLocalStorage("fp_budget",[]);
+  const [bucketList,setBucketList]=useLocalStorage("fp_bucket",[]);
+  const [sommarList,setSommarList]=useLocalStorage("fp_sommar",SOMMAR_DEFAULTS);
 
   const T=cfg.dark?THEMES.dark:THEMES.light;
-  const toggleMed=(fid,idx)=>setFlowMeds(p=>{const arr=[...p[fid]];arr[idx]={...arr[idx],done:!arr[idx].done};return{...p,[fid]:arr};});
+  const toggleMed=(fid,idx)=>setFlowMeds(p=>{
+    const arr=[...p[fid]];
+    const med=arr[idx];
+    const markingDone=!med.done;
+    arr[idx]={...med,done:markingDone,
+      antal:markingDone&&med.antal!=null?Math.max(0,med.antal-1):med.antal,
+      doslogg:markingDone?[...(med.doslogg||[]),{ts:Date.now()}]:(med.doslogg||[])};
+    return{...p,[fid]:arr};
+  });
   const allMeds=Object.values(flowMeds).flat();
   const medsDone=allMeds.filter(m=>m.done).length;
   const doneTasks=tasks.filter(t=>t.lane==="done").length;
   const PHOTO="https://images.unsplash.com/photo-1511895426328-dc8714191011?w=1600&q=80";
 
   // 🔧 Smarta hem-fliken är tillfälligt dold — ta bort kommentaren för att aktivera igen:
-  // const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["smarthome","🏠 Smarta hem"]];
-  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"]];
+  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["bilhus","🚗 Bil & Hus"],["ekonomi","💰 Ekonomi"],["listor","📝 Listor"],["ai","🤖 Assistent"]];
 
   return <>
     <style>{`
@@ -1421,10 +2449,13 @@ export default function App(){
                 ))}
               </div>
               <div style={{flex:1,overflow:"hidden",background:T.card,backdropFilter:T.blur}}>
-                {activeTab==="kanban"&&<KanbanBoard T={T} tasks={tasks} setTasks={setTasks} members={family.members} guestMode={cfg.guestMode}/>}
-                {activeTab==="planning"&&<PlanningTab T={T} backlog={backlog} setBacklog={setBacklog} tasks={tasks} setTasks={setTasks} members={family.members}/>}
+                {activeTab==="kanban"&&<KanbanBoard T={T} tasks={tasks} setTasks={setTasks} members={family.members} guestMode={cfg.guestMode} epics={epics}/>}
+                {activeTab==="planning"&&<PlanningTab T={T} backlog={backlog} setBacklog={setBacklog} tasks={tasks} setTasks={setTasks} members={family.members} templates={templates} setTemplates={setTemplates} epics={epics} setEpics={setEpics}/>}
                 {activeTab==="sysslor"&&<KidsPointsTab T={T} members={family.members} choresDone={choresDone} setChoresDone={setChoresDone} choresList={choresList||CHORES_LIST}/>}
-                {activeTab==="smarthome"&&<div style={{padding:"20px",color:T.textMid,fontSize:13,textAlign:"center",paddingTop:40}}>🏠 Smarta hem<br/><span style={{fontSize:11,color:T.textDim}}>Roborock, Spotify, Hue & Nest</span></div>}
+                {activeTab==="bilhus"&&<CarHouseTab T={T} carReminders={carReminders} setCarReminders={setCarReminders} houseItems={houseItems} setHouseItems={setHouseItems}/>}
+                {activeTab==="ekonomi"&&<EkonomiTab T={T} budget={budget} setBudget={setBudget}/>}
+                {activeTab==="listor"&&<ListorTab T={T} bucketList={bucketList} setBucketList={setBucketList} sommarList={sommarList} setSommarList={setSommarList}/>}
+                {activeTab==="ai"&&<FamiljeAssistentTab T={T} tasks={tasks} flowMeds={flowMeds} family={family}/>}
               </div>
             </div>
             {/* RIGHT */}

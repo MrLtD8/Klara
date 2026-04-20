@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocalStorage } from "./useLocalStorage";
 
 /* ─────────────────────────────────────────────────────────────
    DESIGN DIRECTION: Warm, refined iOS-native feel.
@@ -245,10 +246,11 @@ function TaskCard({task, members, onComplete, onMove, onEdit, style={}, compact}
 }
 
 /* ─── HOME SCREEN ───────────────────────────────────────────── */
-function HomeScreen({tasks,setTasks,members}){
+function HomeScreen({tasks,setTasks,members,activeMemberId}){
   const now=useClock();
   const h=now.getHours();
-  const name=members[0]?.name||"";
+  const activeMember=members.find(m=>m.id===activeMemberId)||null;
+  const name=activeMember?.name||"";
 
   const inProgress=[...tasks.filter(t=>t.lane==="progress")].sort(byPrio);
   const urgent=tasks.filter(t=>t.prio==="urgent"&&t.lane!=="done");
@@ -567,11 +569,11 @@ function PlanningScreen({tasks,setTasks,members}){
 }
 
 /* ─── PROFILE SCREEN ────────────────────────────────────────── */
-function ProfileScreen({members,family}){
+function ProfileScreen({members,family,tasks,activeMemberId,setActiveMemberId}){
   const stats=[
-    {label:"Totalt",  val:DEMO_TASKS.length,   color:C.amber},
-    {label:"Pågår",   val:DEMO_TASKS.filter(t=>t.lane==="progress").length, color:C.blue},
-    {label:"Klart",   val:DEMO_TASKS.filter(t=>t.lane==="done").length, color:C.green},
+    {label:"Totalt",  val:tasks.length,   color:C.amber},
+    {label:"Pågår",   val:tasks.filter(t=>t.lane==="progress").length, color:C.blue},
+    {label:"Klart",   val:tasks.filter(t=>t.lane==="done").length, color:C.green},
   ];
   return (
     <div style={{flex:1,overflowY:"auto",paddingBottom:90}}>
@@ -601,7 +603,7 @@ function ProfileScreen({members,family}){
         {/* Members */}
         <h3 style={{fontFamily:"'Fraunces',serif",fontSize:17,fontWeight:700,color:C.text,marginBottom:12}}>Familjemedlemmar</h3>
         {members.map(m=>{
-          const memberTasks=DEMO_TASKS.filter(t=>t.mids.includes(m.id));
+          const memberTasks=tasks.filter(t=>t.mids.includes(m.id));
           const done=memberTasks.filter(t=>t.lane==="done").length;
           return <div key={m.id} style={{background:C.surface,borderRadius:16,padding:"14px 16px",marginBottom:10,boxShadow:C.shadow,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:14}}>
             <div style={{width:44,height:44,borderRadius:14,background:m.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,color:"#fff",fontWeight:700,flexShrink:0,fontFamily:"'DM Sans',sans-serif"}}>{m.av}</div>
@@ -611,9 +613,14 @@ function ProfileScreen({members,family}){
                 <div style={{height:"100%",background:m.color,width:`${memberTasks.length?done/memberTasks.length*100:0}%`,borderRadius:3,transition:"width .5s"}}/>
               </div>
             </div>
-            <div style={{textAlign:"right"}}>
-              <p style={{fontSize:16,fontWeight:700,color:m.color,fontFamily:"'DM Sans',sans-serif"}}>{done}/{memberTasks.length}</p>
-              <p style={{fontSize:10,color:C.textDim,fontFamily:"'DM Sans',sans-serif"}}>klara</p>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+              <div style={{textAlign:"right"}}>
+                <p style={{fontSize:16,fontWeight:700,color:m.color,fontFamily:"'DM Sans',sans-serif"}}>{done}/{memberTasks.length}</p>
+                <p style={{fontSize:10,color:C.textDim,fontFamily:"'DM Sans',sans-serif"}}>klara</p>
+              </div>
+              <button onClick={()=>setActiveMemberId(activeMemberId===m.id?null:m.id)} style={{padding:"3px 9px",borderRadius:8,border:`1.5px solid ${activeMemberId===m.id?m.color:C.border}`,background:activeMemberId===m.id?m.color+"22":"transparent",color:activeMemberId===m.id?m.color:C.textDim,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>
+                {activeMemberId===m.id?"✓ Det är jag":"Det är jag"}
+              </button>
             </div>
           </div>;
         })}
@@ -631,9 +638,11 @@ function ProfileScreen({members,family}){
 /* ─── MAIN APP ──────────────────────────────────────────────── */
 export default function MobileApp(){
   const [tab,setTab]=useState("home");
-  const [tasks,setTasks]=useState(DEMO_TASKS);
-  const [members]=useState(DEMO_MEMBERS);
-  const [family]=useState({name:"Landerstedts"});
+  // Delar fp_tasks och fp_family med dashboard-appen (samma localStorage-nycklar)
+  const [tasks,setTasks]=useLocalStorage("fp_tasks",[]);
+  const [family]=useLocalStorage("fp_family",{name:"Familjen",members:[]});
+  const members=family.members||[];
+  const [activeMemberId,setActiveMemberId]=useLocalStorage("fp_mobile_active_member",null);
   const [showQuick,setShowQuick]=useState(false);
 
   const handleTab=(id)=>{
@@ -681,10 +690,10 @@ export default function MobileApp(){
       <div className="screen-enter" style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {showQuick
           ?<QuickAdd members={members} onSave={addTask} onClose={()=>setShowQuick(false)}/>
-          :tab==="home"    ?<HomeScreen    tasks={tasks} setTasks={setTasks} members={members}/>
+          :tab==="home"    ?<HomeScreen    tasks={tasks} setTasks={setTasks} members={members} activeMemberId={activeMemberId}/>
           :tab==="tasks"   ?<KanbanScreen  tasks={tasks} setTasks={setTasks} members={members}/>
           :tab==="plan"    ?<PlanningScreen tasks={tasks} setTasks={setTasks} members={members}/>
-          :tab==="profile" ?<ProfileScreen members={members} family={family}/>
+          :tab==="profile" ?<ProfileScreen members={members} family={family} tasks={tasks} activeMemberId={activeMemberId} setActiveMemberId={setActiveMemberId}/>
           :null
         }
       </div>

@@ -136,6 +136,16 @@ export const EVENT_TYPES = {
   travel:  {icon:"✈️", label:"Resa",          bg:"#EDF2EF", border:"#7A9080"},
   holiday: {icon:"🎉", label:"Helgdag",       bg:"#FFF5E0", border:"#D4A030"},
   note:    {icon:"📌", label:"Anteckning",    bg:"#F5F0E8", border:"#B09870"},
+  dance:   {icon:"💃", label:"Dans",          bg:"#FDE8F5", border:"#D060A0"},
+  swim:    {icon:"🏊", label:"Simning",       bg:"#E0F0FF", border:"#5090D0"},
+  party:   {icon:"🎂", label:"Kalas",         bg:"#FFF0E0", border:"#E0A030"},
+  paddle:  {icon:"🏓", label:"Paddling",      bg:"#E8F8EE", border:"#50A060"},
+  tennis:  {icon:"🎾", label:"Tennis",        bg:"#F0FFE8", border:"#70A030"},
+  football:{icon:"⚽", label:"Fotboll",       bg:"#E8F5E8", border:"#409040"},
+  gym:     {icon:"💪", label:"Träning",       bg:"#FFF0E8", border:"#D07030"},
+  music:   {icon:"🎵", label:"Musik",         bg:"#F0E8FF", border:"#9060C0"},
+  dentist: {icon:"🦷", label:"Tandläkare",    bg:"#F0F8FF", border:"#6080C0"},
+  meeting: {icon:"👥", label:"Möte",          bg:"#F5F5F0", border:"#909080"},
 };
 
 /* ═══ FAMILJENS STANDARDMIDDAGAR ═════════════════════════════════

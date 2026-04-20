@@ -1923,6 +1923,131 @@ function EkonomiTab({T,budget,setBudget}){
   </div>;
 }
 
+/* ═══ LISTOR (BUCKETLIST + SOMMARLOV) ═══════════════════════════ */
+const BUCKET_CATS=["Resa","Upplevelse","Lära sig","Äventyr","Mat & dryck","Övrigt"];
+const SOMMAR_DEFAULTS=[
+  {title:"Bada i sjö",cat:"Natur",done:false},{title:"Grilla på stranden",cat:"Mat",done:false},
+  {title:"Besök ett museum",cat:"Stad",done:false},{title:"Bygg sandslott",cat:"Vattenlek",done:false},
+  {title:"Campa under stjärnorna",cat:"Äventyr",done:false},{title:"Plocka bär i skogen",cat:"Natur",done:false},
+  {title:"Gör glass hemma",cat:"Mat",done:false},{title:"Cykla en ny stig",cat:"Äventyr",done:false},
+  {title:"Besök ett zoo",cat:"Stad",done:false},{title:"Vattenballong-krig",cat:"Vattenlek",done:false},
+  {title:"Måla/rita utomhus",cat:"Kreativt",done:false},{title:"Fiska",cat:"Natur",done:false},
+  {title:"Laga pizza från grunden",cat:"Mat",done:false},{title:"Bygga kojor",cat:"Äventyr",done:false},
+  {title:"Solnedgångspromenad",cat:"Natur",done:false},
+];
+const SOMMAR_CATS=["Alla","Natur","Äventyr","Stad","Vattenlek","Mat","Kreativt"];
+function ListorTab({T,bucketList,setBucketList,sommarList,setSommarList}){
+  const [view,setView]=useState("bucket"); // bucket|sommar
+  const [newBucket,setNewBucket]=useState({title:"",cat:BUCKET_CATS[0],who:""});
+  const [newSommar,setNewSommar]=useState({title:"",cat:SOMMAR_CATS[1]});
+  const [sommarFilter,setSommarFilter]=useState("Alla");
+
+  const bucketDone=bucketList.filter(i=>i.done).length;
+  const sommarDone=sommarList.filter(i=>i.done).length;
+  const filteredSommar=sommarFilter==="Alla"?sommarList:sommarList.filter(i=>i.cat===sommarFilter);
+
+  function addBucket(){
+    if(!newBucket.title.trim())return;
+    setBucketList(p=>[...p,{id:Date.now(),...newBucket,done:false,addedAt:Date.now()}]);
+    setNewBucket(b=>({...b,title:"",who:""}));
+  }
+  function addSommar(){
+    if(!newSommar.title.trim())return;
+    setSommarList(p=>[...p,{id:Date.now(),...newSommar,done:false}]);
+    setNewSommar(s=>({...s,title:""}));
+  }
+
+  const btnStyle=(active)=>({padding:"6px 14px",borderRadius:20,border:`1.5px solid ${active?T.amber:T.border}`,background:active?T.amberBg:"transparent",color:active?T.amber:T.textMid,fontSize:11,fontWeight:active?700:400,cursor:"pointer",fontFamily:"inherit"});
+  const inputS={padding:"7px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"};
+
+  return <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",gap:6}}>
+      <button onClick={()=>setView("bucket")} style={btnStyle(view==="bucket")}>🪣 Bucketlist ({bucketDone}/{bucketList.length})</button>
+      <button onClick={()=>setView("sommar")} style={btnStyle(view==="sommar")}>☀️ Sommarlov ({sommarDone}/{sommarList.length})</button>
+    </div>
+
+    {view==="bucket"&&<>
+      {/* Progress */}
+      {bucketList.length>0&&<div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,padding:"10px 14px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+          <span style={{fontSize:10,fontWeight:700,color:T.text}}>Familjensbucketlist</span>
+          <span style={{fontSize:10,color:T.textDim}}>{bucketDone} av {bucketList.length} klara</span>
+        </div>
+        <div style={{background:T.border,borderRadius:4,height:6,overflow:"hidden"}}>
+          <div style={{height:"100%",borderRadius:4,background:"linear-gradient(90deg,#6B4EA8,#a880e0)",width:`${bucketList.length?bucketDone/bucketList.length*100:0}%`,transition:"width .4s"}}/>
+        </div>
+      </div>}
+      {/* Add form */}
+      <div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,padding:"10px 12px",display:"flex",gap:5,flexWrap:"wrap"}}>
+        <input value={newBucket.title} onChange={e=>setNewBucket(b=>({...b,title:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addBucket()} placeholder="Lägg till drömupplevelse…" style={{...inputS,flex:3,minWidth:150}}/>
+        <input value={newBucket.who} onChange={e=>setNewBucket(b=>({...b,who:e.target.value}))} placeholder="Vem?" style={{...inputS,flex:1,minWidth:70}}/>
+        <select value={newBucket.cat} onChange={e=>setNewBucket(b=>({...b,cat:e.target.value}))} style={{...inputS,flex:1,minWidth:90}}>
+          {BUCKET_CATS.map(c=><option key={c}>{c}</option>)}
+        </select>
+        <button onClick={addBucket} style={{padding:"7px 14px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>+ Lägg till</button>
+      </div>
+      {/* List */}
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {bucketList.length===0&&<p style={{fontSize:11,color:T.textDim,textAlign:"center",padding:"20px 0"}}>Inga drömmar ännu — lägg till er första bucketlist-upplevelse!</p>}
+        {bucketList.map(item=>(
+          <div key={item.id} onClick={()=>setBucketList(p=>p.map(i=>i.id===item.id?{...i,done:!i.done,doneAt:!i.done?Date.now():null}:i))} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:item.done?"#f0f7f0":T.card,border:`1px solid ${item.done?"#b2dfdb":T.border}`,cursor:"pointer",opacity:item.done?0.7:1,transition:"all .2s"}}>
+            <div style={{width:22,height:22,borderRadius:"50%",border:`2.5px solid ${item.done?"#27ae60":"#9B84D8"}`,background:item.done?"#27ae60":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              {item.done&&<span style={{color:"#fff",fontSize:11,fontWeight:700}}>✓</span>}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontSize:12,color:T.text,fontWeight:600,margin:0,textDecoration:item.done?"line-through":"none"}}>{item.title}</p>
+              <div style={{display:"flex",gap:6,marginTop:2}}>
+                <span style={{fontSize:9,padding:"1px 6px",borderRadius:999,background:"#9B84D818",color:"#6B4EA8",fontWeight:600}}>{item.cat}</span>
+                {item.who&&<span style={{fontSize:9,color:T.textDim}}>{item.who}</span>}
+                {item.done&&item.doneAt&&<span style={{fontSize:9,color:"#27ae60"}}>✓ {new Date(item.doneAt).toLocaleDateString("sv-SE")}</span>}
+              </div>
+            </div>
+            <button onClick={e=>{e.stopPropagation();setBucketList(p=>p.filter(i=>i.id!==item.id));}} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:14,flexShrink:0}}>✕</button>
+          </div>
+        ))}
+      </div>
+    </>}
+
+    {view==="sommar"&&<>
+      {/* Progress */}
+      <div style={{background:"linear-gradient(135deg,#fff8e1,#fffde7)",borderRadius:12,border:"1px solid #ffe082",padding:"12px 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <div><p style={{fontSize:13,fontWeight:700,color:"#e65100",margin:0}}>☀️ Sommarlovslistan {new Date().getFullYear()}</p><p style={{fontSize:10,color:"#bf360c",margin:"2px 0 0"}}>Bocka av allt kul ni gör!</p></div>
+          <div style={{textAlign:"right"}}><p style={{fontSize:22,fontWeight:700,color:"#e65100",margin:0}}>{sommarDone}/{sommarList.length}</p><p style={{fontSize:9,color:"#bf360c",margin:0}}>klara</p></div>
+        </div>
+        <div style={{background:"#ffcc80",borderRadius:4,height:7,overflow:"hidden"}}>
+          <div style={{height:"100%",borderRadius:4,background:"linear-gradient(90deg,#ff8f00,#ffca28)",width:`${sommarList.length?sommarDone/sommarList.length*100:0}%`,transition:"width .4s"}}/>
+        </div>
+      </div>
+      {/* Category filter */}
+      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        {SOMMAR_CATS.map(c=><button key={c} onClick={()=>setSommarFilter(c)} style={{padding:"4px 10px",borderRadius:999,border:`1.5px solid ${sommarFilter===c?"#e65100":T.border}`,background:sommarFilter===c?"#fff3e0":"transparent",color:sommarFilter===c?"#e65100":T.textDim,fontSize:10,fontWeight:sommarFilter===c?700:400,cursor:"pointer",fontFamily:"inherit"}}>{c}</button>)}
+      </div>
+      {/* Add custom */}
+      <div style={{display:"flex",gap:5}}>
+        <input value={newSommar.title} onChange={e=>setNewSommar(s=>({...s,title:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addSommar()} placeholder="Lägg till sommaraktivitet…" style={{...inputS,flex:3}}/>
+        <select value={newSommar.cat} onChange={e=>setNewSommar(s=>({...s,cat:e.target.value}))} style={{...inputS,flex:1}}>
+          {SOMMAR_CATS.filter(c=>c!=="Alla").map(c=><option key={c}>{c}</option>)}
+        </select>
+        <button onClick={addSommar} style={{padding:"7px 12px",borderRadius:8,border:"none",background:"#ff8f00",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>+</button>
+      </div>
+      {/* List */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {filteredSommar.map(item=>(
+          <div key={item.id} onClick={()=>setSommarList(p=>p.map(i=>i.id===item.id?{...i,done:!i.done}:i))} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 11px",borderRadius:9,background:item.done?"#fff8e1":T.card,border:`1px solid ${item.done?"#ffe082":T.border}`,cursor:"pointer",transition:"all .2s"}}>
+            <span style={{fontSize:18,flexShrink:0}}>{item.done?"✅":"⬜"}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontSize:11,color:T.text,fontWeight:600,margin:0,textDecoration:item.done?"line-through":"none"}}>{item.title}</p>
+              <span style={{fontSize:9,color:"#e65100"}}>{item.cat}</span>
+            </div>
+          </div>
+        ))}
+        {filteredSommar.length===0&&<p style={{fontSize:11,color:T.textDim,gridColumn:"span 2",textAlign:"center",padding:"16px 0"}}>Inga aktiviteter i denna kategori.</p>}
+      </div>
+    </>}
+  </div>;
+}
+
 /* ═══ MAIN APP ══════════════════════════════════════════════════ */
 export default function App(){
   const now=useClock();
@@ -1947,6 +2072,8 @@ export default function App(){
   const [carReminders,setCarReminders]=useLocalStorage("fp_car",[]);
   const [houseItems,setHouseItems]=useLocalStorage("fp_house",[]);
   const [budget,setBudget]=useLocalStorage("fp_budget",[]);
+  const [bucketList,setBucketList]=useLocalStorage("fp_bucket",[]);
+  const [sommarList,setSommarList]=useLocalStorage("fp_sommar",SOMMAR_DEFAULTS);
 
   const T=cfg.dark?THEMES.dark:THEMES.light;
   const toggleMed=(fid,idx)=>setFlowMeds(p=>{
@@ -1964,7 +2091,7 @@ export default function App(){
   const PHOTO="https://images.unsplash.com/photo-1511895426328-dc8714191011?w=1600&q=80";
 
   // 🔧 Smarta hem-fliken är tillfälligt dold — ta bort kommentaren för att aktivera igen:
-  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["bilhus","🚗 Bil & Hus"],["ekonomi","💰 Ekonomi"]];
+  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["bilhus","🚗 Bil & Hus"],["ekonomi","💰 Ekonomi"],["listor","📝 Listor"]];
 
   return <>
     <style>{`
@@ -2068,6 +2195,7 @@ export default function App(){
                 {activeTab==="sysslor"&&<KidsPointsTab T={T} members={family.members} choresDone={choresDone} setChoresDone={setChoresDone} choresList={choresList||CHORES_LIST}/>}
                 {activeTab==="bilhus"&&<CarHouseTab T={T} carReminders={carReminders} setCarReminders={setCarReminders} houseItems={houseItems} setHouseItems={setHouseItems}/>}
                 {activeTab==="ekonomi"&&<EkonomiTab T={T} budget={budget} setBudget={setBudget}/>}
+                {activeTab==="listor"&&<ListorTab T={T} bucketList={bucketList} setBucketList={setBucketList} sommarList={sommarList} setSommarList={setSommarList}/>}
               </div>
             </div>
             {/* RIGHT */}

@@ -1399,7 +1399,7 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
       </div>
       {/* Section tabs */}
       <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,flexShrink:0,overflowX:"auto"}}>
-        {[["general","⚙️ Allmänt"],["mediciner","💊 Mediciner"],["meals","🍽️ Mat"],["school","🏫 Skola"],["sysslor","⭐ Sysslor"]].map(([id,label])=>(
+        {[["general","⚙️ Allmänt"],["moduler","📱 Moduler"],["mediciner","💊 Mediciner"],["meals","🍽️ Mat"],["school","🏫 Skola"],["sysslor","⭐ Sysslor"]].map(([id,label])=>(
           <button key={id} onClick={()=>setSection(id)} style={{flexShrink:0,flex:1,padding:"8px 6px",border:"none",borderBottom:`2px solid ${section===id?T.amber:"transparent"}`,background:section===id?T.amberBg:"transparent",color:section===id?T.amber:T.textMid,fontSize:10,fontWeight:section===id?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",whiteSpace:"nowrap"}}>{label}</button>
         ))}
       </div>
@@ -1462,6 +1462,29 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
               </p>
             </div>
           )}
+        </>}
+
+        {/* ── MODULER ── */}
+        {section==="moduler"&&<>
+          <p style={{fontSize:9,color:T.textDim,letterSpacing:1.5,textTransform:"uppercase",margin:"12px 0 4px"}}>Aktiva flikar</p>
+          <p style={{fontSize:11,color:T.textMid,marginBottom:12,lineHeight:1.5}}>Välj vilka moduler som syns i menyraden. Tavlan visas alltid.</p>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {ALL_MODULES.map(mod=>{
+              const enabled=(cfg.enabledTabs||ALL_MODULES.map(m=>m.id)).includes(mod.id);
+              return <div key={mod.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,background:enabled?T.amberBg:T.surface,border:`1.5px solid ${enabled?T.amber:T.border}`,transition:"all .2s"}}>
+                <span style={{fontSize:20,flexShrink:0,marginTop:1}}>{mod.icon}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontSize:12,fontWeight:700,color:T.text,margin:"0 0 2px"}}>{mod.label}</p>
+                  <p style={{fontSize:10,color:T.textDim,margin:0,lineHeight:1.4}}>{mod.desc}</p>
+                </div>
+                <Toggle value={enabled} onChange={v=>{
+                  const curr=cfg.enabledTabs||ALL_MODULES.map(m=>m.id);
+                  set("enabledTabs",v?[...curr,mod.id]:curr.filter(id=>id!==mod.id));
+                }} T={T} small/>
+              </div>;
+            })}
+          </div>
+          <p style={{fontSize:9,color:T.textDim,marginTop:10,textAlign:"center"}}>Ändringar träder i kraft direkt. Data raderas inte när du inaktiverar en modul.</p>
         </>}
 
         {/* ── FAMILY MEALS ── */}
@@ -1652,6 +1675,15 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
 }
 
 /* ═══ ONBOARDING ════════════════════════════════════════════════ */
+const ALL_MODULES=[
+  {id:"planning", label:"🗂️ Planering",     icon:"🗂️", desc:"Backlog, task-mallar och epics. Planera projekt och driv dem framåt vecka för vecka."},
+  {id:"sysslor",  label:"⭐ Sysslor",        icon:"⭐", desc:"Poängsystem för barnen med belöningar, historik och det färgglada aktivitetshjulet."},
+  {id:"bilhus",   label:"🚗 Bil & Hus",      icon:"🚗", desc:"Årsreminders för däckbyte och besiktning, plus underhållsplan för huset med kategori och intervall."},
+  {id:"ekonomi",  label:"💰 Ekonomi",        icon:"💰", desc:"Månadsbudget med inkomst/utgifter, kategorifördelning, kommande betalningar och spartips."},
+  {id:"listor",   label:"📝 Listor",         icon:"📝", desc:"Familjens bucketlist med drömupplevelser och sommarlovslistan 2026 med 15 förfyllda aktiviteter."},
+  {id:"ai",       label:"🤖 Assistent",      icon:"🤖", desc:"Daglig morgon- och kvällsrapport med tasks och händelser, plus AI-sammanfattning av e-post via Claude."},
+];
+
 const TOUR_STEPS=[
   {title:"Välkommen! 🏡",body:"Er personliga familjedashboard. Vi sätter upp den på 2 minuter.",icon:"🏡"},
   {title:"Kalendervy 📅",body:"Klicka på 📅-knappen i toppraden för att byta till kalendervy — precis som er väggkalender, med klistermärken, mat och händelser.",icon:"📅"},
@@ -1660,7 +1692,12 @@ const TOUR_STEPS=[
   {title:"Skolans mat 🏫",body:"Under ⚙️ → 'Skolans mat' fyller ni i matsedeln (mån–fre). Den dyker automatiskt upp i rätt dag i kalendern.",icon:"🏫"},
   {title:"Gästläge 🙈",body:"Tryck på 👁️-knappen för att dölja mediciner och känsliga uppgifter när ni har besök.",icon:"🙈"},
   {title:"Smarta hem 🏠",body:"Styr Roborock, Hue-lampor, Spotify och Nest-högtalare direkt från dashboarden.",icon:"🏠"},
-  {title:"Allt klart! 🎉",body:"Ändra familjens namn, members, mat och skola när som helst i ⚙️-inställningarna.",icon:"🎉"},
+  {title:"Bil & Hus 🚗",body:"Årsreminders för däckbyte, besiktning och service. Plus en underhållsplan för huset med kategorier och intervall.",icon:"🚗"},
+  {title:"Ekonomi 💰",body:"Månadsbudget med inkomst och utgifter per kategori, kommande betalningar och praktiska spartips.",icon:"💰"},
+  {title:"Listor 📝",body:"Familjens bucketlist med drömupplevelser att bocka av — och en sommarlovslista med aktiviteter för barnen.",icon:"📝"},
+  {title:"Aktivitetshjulet 🎡",body:"Snurra hjulet i Sysslor-tabben och låt slumpen välja kvällens aktivitet! Anpassa listan med egna idéer.",icon:"🎡"},
+  {title:"Familjeassistenten 🤖",body:"Dagsrapport varje morgon med tasks, kalender och mediciner. Klistra in e-post och låt AI sammanfatta det viktigaste.",icon:"🤖"},
+  {title:"Allt klart! 🎉",body:"Aktivera och inaktivera moduler när som helst i ⚙️ → Moduler. Allt sparas lokalt på er enhet.",icon:"🎉"},
 ];
 const MEMBER_COLORS=["#B8722A","#2A5FA8","#6B4EA8","#3A7A52","#C62828","#9B4EA8"];
 
@@ -1668,16 +1705,54 @@ function Onboarding({onDone}){
   const [step,setStep]=useState(0);
   const [fname,setFname]=useState("");
   const [members,setMembers]=useState([{id:1,name:"",color:MEMBER_COLORS[0],av:"",inSysslor:false},{id:2,name:"",color:MEMBER_COLORS[1],av:"",inSysslor:false}]);
+  const [enabledMods,setEnabledMods]=useState(ALL_MODULES.map(m=>m.id)); // all on by default
   const [tourStep,setTourStep]=useState(0);
   const addM=()=>setMembers(p=>[...p,{id:Date.now(),name:"",color:MEMBER_COLORS[p.length%MEMBER_COLORS.length],av:"",inSysslor:false}]);
   const updM=(id,n)=>setMembers(p=>p.map(m=>m.id===id?{...m,name:n,av:n.charAt(0).toUpperCase()||"?"}:m));
   const toggleSysslor=id=>setMembers(p=>p.map(m=>m.id===id?{...m,inSysslor:!m.inSysslor}:m));
   const delM=id=>setMembers(p=>p.filter(m=>m.id!==id));
-  const finish=()=>onDone({name:fname||"Familjen",members:members.filter(m=>m.name.trim()).map(m=>({...m,av:m.name.charAt(0).toUpperCase()}))});
+  const toggleMod=id=>setEnabledMods(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  const finish=()=>onDone({name:fname||"Familjen",members:members.filter(m=>m.name.trim()).map(m=>({...m,av:m.name.charAt(0).toUpperCase()})),enabledTabs:enabledMods});
   const overlay={position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)"};
   const box={width:460,background:"#fff",borderRadius:20,overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"};
 
   if(step===3){
+    // Module selection step
+    return <div style={overlay}><div style={{...box,maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
+      <div style={{background:"linear-gradient(135deg,#6B4EA8,#9B84D8)",padding:"20px 26px",textAlign:"center",flexShrink:0}}>
+        <div style={{fontSize:36,marginBottom:4}}>📱</div>
+        <h2 style={{fontFamily:"'Fraunces',serif",fontSize:19,fontWeight:700,color:"#fff",lineHeight:1.3}}>Välj era moduler</h2>
+        <p style={{fontSize:12,color:"rgba(255,255,255,0.8)",margin:"6px 0 0"}}>Ni kan alltid ändra detta i ⚙️-inställningarna</p>
+        <div style={{display:"flex",justifyContent:"center",gap:4,marginTop:10}}>
+          {[0,1,2,3].map(i=><div key={i} style={{width:i===2?18:6,height:6,borderRadius:3,background:i===2?"#fff":"rgba(255,255,255,0.4)",transition:"all .3s"}}/>)}
+        </div>
+      </div>
+      <div style={{overflowY:"auto",padding:"16px 20px",flex:1}}>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {ALL_MODULES.map(mod=>{
+            const on=enabledMods.includes(mod.id);
+            return <button key={mod.id} onClick={()=>toggleMod(mod.id)} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,background:on?"#f3eeff":"#fafafa",border:`1.5px solid ${on?"#6B4EA8":"#e0daf5"}`,cursor:"pointer",textAlign:"left",fontFamily:"inherit",transition:"all .2s"}}>
+              <span style={{fontSize:22,flexShrink:0,marginTop:1}}>{mod.icon}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontSize:12,fontWeight:700,color:"#1a1a2e",margin:"0 0 2px"}}>{mod.label}</p>
+                <p style={{fontSize:10,color:"#666",margin:0,lineHeight:1.4}}>{mod.desc}</p>
+              </div>
+              <div style={{width:22,height:22,borderRadius:"50%",border:`2px solid ${on?"#6B4EA8":"#ccc"}`,background:on?"#6B4EA8":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2,transition:"all .2s"}}>
+                {on&&<span style={{color:"#fff",fontSize:11,fontWeight:700}}>✓</span>}
+              </div>
+            </button>;
+          })}
+        </div>
+      </div>
+      <div style={{padding:"12px 20px",borderTop:"1px solid #f0edf8",flexShrink:0,display:"flex",gap:7}}>
+        <button onClick={()=>setStep(2)} style={{flex:1,padding:"10px",borderRadius:10,border:"1px solid #EDE0D4",background:"transparent",color:"#9A8E7C",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Tillbaka</button>
+        <button onClick={()=>setStep(4)} style={{flex:2,padding:"10px",borderRadius:10,border:"none",background:"#6B4EA8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Visa tour →</button>
+      </div>
+      <button onClick={finish} style={{display:"block",width:"100%",padding:"8px",borderTop:"none",border:"none",background:"transparent",color:"#9A8E7C",fontSize:11,cursor:"pointer",fontFamily:"inherit",paddingBottom:14}}>Hoppa över — gå direkt till dashboarden</button>
+    </div></div>;
+  }
+
+  if(step===4){
     const ts=TOUR_STEPS[tourStep];
     return <div style={overlay}><div style={box}>
       <div style={{background:"linear-gradient(135deg,#B8722A,#E8A84C)",padding:"26px",textAlign:"center"}}>
@@ -1708,6 +1783,7 @@ function Onboarding({onDone}){
       {step===2&&<h2 style={{fontFamily:"'Fraunces',serif",fontSize:21,fontWeight:700,color:"#fff"}}>Vilka är i familjen?</h2>}
       <div style={{display:"flex",justifyContent:"center",gap:4,marginTop:10}}>
         {[0,1,2].map(i=><div key={i} style={{width:i===step?18:6,height:6,borderRadius:3,background:"rgba(255,255,255,"+(i===step?"1)":"0.4)"),transition:"all .3s"}}/>)}
+        <div style={{width:6,height:6,borderRadius:3,background:"rgba(255,255,255,0.4)"}}/>
       </div>
     </div>
     <div style={{padding:"22px 24px"}}>
@@ -2312,7 +2388,7 @@ export default function App(){
   const now=useClock();
   const [showOnboarding,setShowOnboarding]=useLocalStorage("fp_onboarding",true);
   const [family,setFamily]=useLocalStorage("fp_family",{name:"Familjen",members:[]});
-  const [cfg,setCfg]=useLocalStorage("fp_cfg",{dark:false,showPhoto:true,photoDim:28,guestMode:false,morningOn:true,morningT:"07:00",eveningOn:true,eveningT:"20:00",keepAwake:true});
+  const [cfg,setCfg]=useLocalStorage("fp_cfg",{dark:false,showPhoto:true,photoDim:28,guestMode:false,morningOn:true,morningT:"07:00",eveningOn:true,eveningT:"20:00",keepAwake:true,enabledTabs:ALL_MODULES.map(m=>m.id)});
   const [showSettings,setShowSettings]=useState(false);
   const [activeTab,setActiveTab]=useState("kanban");
   const [calendarMode,setCalendarMode]=useState(false);
@@ -2350,7 +2426,8 @@ export default function App(){
   const PHOTO="https://images.unsplash.com/photo-1511895426328-dc8714191011?w=1600&q=80";
 
   // 🔧 Smarta hem-fliken är tillfälligt dold — ta bort kommentaren för att aktivera igen:
-  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["bilhus","🚗 Bil & Hus"],["ekonomi","💰 Ekonomi"],["listor","📝 Listor"],["ai","🤖 Assistent"]];
+  const enabledSet=new Set(cfg.enabledTabs||ALL_MODULES.map(m=>m.id));
+  const TABS=[["kanban","📋 Tavlan"],...ALL_MODULES.filter(m=>enabledSet.has(m.id)).map(m=>[m.id,m.label])];
 
   return <>
     <style>{`
@@ -2368,7 +2445,7 @@ export default function App(){
       @keyframes slideDownFade{from{opacity:0;transform:translateX(-50%) translateY(-10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
     `}</style>
 
-    {showOnboarding&&<Onboarding onDone={fam=>{setFamily(fam);setShowOnboarding(false);}}/>}
+    {showOnboarding&&<Onboarding onDone={({enabledTabs,...fam})=>{setFamily(fam);if(enabledTabs)setCfg(c=>({...c,enabledTabs}));setShowOnboarding(false);}}/>}
 
     <div style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",display:"flex",flexDirection:"column"}}>
       {/* BG */}

@@ -408,21 +408,29 @@ function TaskForm({T,members,init,onSave,onCancel,showLane,showHideGuest}){
   </div>;
 }
 
-function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,setDragTask,setDragOver}){
+function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,setDragTask,setDragOver,members}){
   const [exp,setExp]=useState(false);
+  const [dragging,setDragging]=useState(false);
   const pm=PRIO_META[task.prio]||PRIO_META.medium;
-  return <div key={task.id} draggable onDragStart={()=>setDragTask(task.id)} onDragEnd={()=>{setDragTask(null);setDragOver(null);}} style={{borderRadius:9,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden",marginBottom:5,cursor:"grab",userSelect:"none"}}>
+  const assignees=(members||[]).filter(m=>(task.mids||[]).includes(m.id));
+  return <div key={task.id} draggable
+    onDragStart={()=>{setDragTask(task.id);setDragging(true);}}
+    onDragEnd={()=>{setDragTask(null);setDragOver(null);setDragging(false);}}
+    style={{borderRadius:9,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden",marginBottom:5,cursor:"grab",userSelect:"none",opacity:dragging?0.4:1,transition:"opacity .15s"}}>
     <div style={{display:"flex",gap:7,alignItems:"center",padding:"8px 9px"}}>
       <span style={{color:T.textDim,fontSize:12,flexShrink:0}}>⠿</span>
       <div style={{width:3,borderRadius:3,alignSelf:"stretch",background:pm.color,flexShrink:0,minHeight:22}}/>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:11,fontWeight:700,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.title}</div>
-        <div style={{display:"flex",gap:2,marginTop:2,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:2,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
           <span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:pm.bg,color:pm.color,fontWeight:700}}>{pm.icon}</span>
           {task.recur!=="none"&&<span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:T.blueBg,color:T.blue,fontWeight:700}}>🔁</span>}
           {task.tags.slice(0,2).map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
         </div>
       </div>
+      {assignees.length>0&&<div style={{display:"flex",marginRight:2}}>
+        {assignees.slice(0,3).map((m,i)=><div key={m.id} style={{width:18,height:18,borderRadius:"50%",background:m.color,border:`1.5px solid ${T.card}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700,marginLeft:i>0?-5:0,flexShrink:0}}>{m.av}</div>)}
+      </div>}
       <button onClick={()=>setExp(e=>!e)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.textDim,padding:"6px 8px",lineHeight:1,transform:exp?"rotate(0)":"rotate(-90deg)",transition:"transform .2s",flexShrink:0}}>▾</button>
     </div>
     {exp&&<div style={{padding:"0 9px 8px",borderTop:`1px solid ${T.border}`,paddingTop:7,display:"flex",flexDirection:"column",gap:5}}>
@@ -449,7 +457,7 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode}){
   const moveDown=(id)=>setTasks(p=>{const lane=p.find(t=>t.id===id)?.lane;const il=p.filter(t=>t.lane===lane).sort((a,b)=>a.order-b.order);const idx=il.findIndex(t=>t.id===id);if(idx===il.length-1)return p;const no=[...il];[no[idx],no[idx+1]]=[no[idx+1],no[idx]];const om=Object.fromEntries(no.map((t,i)=>[t.id,i]));return p.map(t=>om[t.id]!==undefined?{...t,order:om[t.id]}:t);});
   const saveTask=(f)=>{if(editing==="new")setTasks(p=>[...p,{...makeTask(),...f,id:Date.now(),order:p.filter(t=>t.lane===f.lane).length}]);else setTasks(p=>p.map(t=>t.id===editing.id?{...t,...f}:t));setEditing(null);};
   const filtered=tasks.filter(t=>{if(guestMode&&t.hideGuest)return false;if(filterMid==="all")return true;return t.mids.includes(filterMid);});
-  const getLane=id=>filtered.filter(t=>t.lane===id).sort((a,b)=>a.order-b.order);
+  const getLane=id=>filtered.filter(t=>t.lane===id).sort((a,b)=>(a.order??0)-(b.order??0));
 
   return <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
     <div style={{padding:"9px 12px 7px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",flexShrink:0}}>
@@ -478,7 +486,7 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode}){
             {lt.length===0&&<div style={{textAlign:"center",padding:"16px 8px",color:T.textDim,fontSize:10,border:`1px dashed ${T.border}`,borderRadius:7,marginTop:3}}>Dra hit</div>}
             {lt.map((task,idx)=>{
               if(guestMode&&task.hideGuest)return null;
-              return <TaskCard key={task.id} T={T} task={task} idx={idx} lt={lt} moveTask={moveTask} moveUp={moveUp} moveDown={moveDown} setEditing={setEditing} delTask={delTask} setDragTask={setDragTask} setDragOver={setDragOver}/>;
+              return <TaskCard key={task.id} T={T} task={task} idx={idx} lt={lt} moveTask={moveTask} moveUp={moveUp} moveDown={moveDown} setEditing={setEditing} delTask={delTask} setDragTask={setDragTask} setDragOver={setDragOver} members={members}/>;
             })}
           </div>
         </div>;

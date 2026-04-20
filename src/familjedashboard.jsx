@@ -376,25 +376,34 @@ function FlowPanel({T,flowMeds,onToggleMed,guestMode}){
 
 /* ═══ KANBAN ════════════════════════════════════════════════════ */
 // makeTask importeras från ./taskLogic.js
-const EMPTY_FORM={title:"",desc:"",tags:[],mids:[],prio:"medium",lane:"ready",recur:"none",hideGuest:false};
+const EMPTY_FORM={title:"",desc:"",tags:[],mids:[],prio:"medium",lane:"ready",recur:"none",hideGuest:false,estimate:"none",subtasks:[],epicId:null};
+const ESTIMATES=[{val:"none",label:"Ingen",icon:"—"},{val:"30min",label:"30 min",icon:"🕐"},{val:"2h",label:"1–2 h",icon:"⏱️"},{val:"half",label:"Halvdag",icon:"🌅"},{val:"day",label:"Heldag",icon:"📅"}];
 
-function TaskForm({T,members,init,onSave,onCancel,showLane,showHideGuest}){
-  const [f,setF]=useState(init||EMPTY_FORM);
+function TaskForm({T,members,init,onSave,onCancel,showLane,showHideGuest,epics}){
+  const [f,setF]=useState(init?{...EMPTY_FORM,...init}:EMPTY_FORM);
   const sf=(k,v)=>setF(p=>({...p,[k]:v}));
   return <div style={{background:T.card,backdropFilter:T.blur,borderRadius:12,border:`2px solid ${T.amber}`,padding:12,display:"flex",flexDirection:"column",gap:7}}>
     <input placeholder="Titel *" value={f.title} onChange={e=>sf("title",e.target.value)} style={{padding:"7px 10px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
-    <input placeholder="Beskrivning" value={f.desc} onChange={e=>sf("desc",e.target.value)} style={{padding:"7px 10px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+    <input placeholder="Beskrivning" value={f.desc||""} onChange={e=>sf("desc",e.target.value)} style={{padding:"7px 10px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
     <div style={{display:"flex",gap:5}}>
       {Object.entries(PRIO_META).map(([k,v])=><button key={k} onClick={()=>sf("prio",k)} style={{flex:1,padding:"5px 2px",borderRadius:7,border:`1.5px solid ${f.prio===k?v.color:T.border}`,background:f.prio===k?v.bg:"transparent",color:f.prio===k?v.color:T.textDim,fontSize:9,fontWeight:f.prio===k?700:400,cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>{v.icon}<br/><span style={{fontSize:8}}>{v.label}</span></button>)}
     </div>
-    <select value={f.recur} onChange={e=>sf("recur",e.target.value)} style={{padding:"7px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit"}}>
+    {/* Tidsestimering */}
+    <div style={{display:"flex",gap:3}}>
+      {ESTIMATES.map(e=><button key={e.val} onClick={()=>sf("estimate",e.val)} style={{flex:1,padding:"4px 2px",borderRadius:7,border:`1.5px solid ${f.estimate===e.val?T.blue:T.border}`,background:f.estimate===e.val?T.blueBg:"transparent",color:f.estimate===e.val?T.blue:T.textDim,fontSize:8,fontWeight:f.estimate===e.val?700:400,cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>{e.icon}<br/>{e.label}</button>)}
+    </div>
+    <select value={f.recur||"none"} onChange={e=>sf("recur",e.target.value)} style={{padding:"7px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit"}}>
       {RECUR_OPTIONS.map(r=><option key={r.val} value={r.val}>{r.label}</option>)}
     </select>
+    {epics&&epics.length>0&&<select value={f.epicId||""} onChange={e=>sf("epicId",e.target.value||null)} style={{padding:"7px",borderRadius:9,border:`1.5px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit"}}>
+      <option value="">— Inget epic —</option>
+      {epics.map(ep=><option key={ep.id} value={ep.id}>{ep.icon} {ep.title}</option>)}
+    </select>}
     <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-      {ALL_TAGS.map(t=>{const tc=TAG_COLORS[t];const s=f.tags.includes(t);return <button key={t} onClick={()=>sf("tags",s?f.tags.filter(x=>x!==t):[...f.tags,t])} style={{padding:"2px 8px",borderRadius:999,border:`1px solid ${s?tc.text:T.border}`,background:s?tc.bg:"transparent",color:s?tc.text:T.textDim,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>;})}
+      {ALL_TAGS.map(t=>{const tc=TAG_COLORS[t];const s=(f.tags||[]).includes(t);return <button key={t} onClick={()=>sf("tags",s?(f.tags||[]).filter(x=>x!==t):[...(f.tags||[]),t])} style={{padding:"2px 8px",borderRadius:999,border:`1px solid ${s?tc.text:T.border}`,background:s?tc.bg:"transparent",color:s?tc.text:T.textDim,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>;})}
     </div>
     {members.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-      {members.map(m=>{const s=f.mids.includes(m.id);return <button key={m.id} onClick={()=>sf("mids",s?f.mids.filter(x=>x!==m.id):[...f.mids,m.id])} style={{display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:999,border:`1.5px solid ${s?m.color:T.border}`,background:s?m.color+"22":"transparent",cursor:"pointer",fontFamily:"inherit"}}>
+      {members.map(m=>{const s=(f.mids||[]).includes(m.id);return <button key={m.id} onClick={()=>sf("mids",s?(f.mids||[]).filter(x=>x!==m.id):[...(f.mids||[]),m.id])} style={{display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:999,border:`1.5px solid ${s?m.color:T.border}`,background:s?m.color+"22":"transparent",cursor:"pointer",fontFamily:"inherit"}}>
         <div style={{width:14,height:14,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700}}>{m.av}</div>
         <span style={{fontSize:10,color:s?m.color:T.textDim,fontWeight:s?700:400}}>{m.name}</span>
       </button>;})}
@@ -408,11 +417,20 @@ function TaskForm({T,members,init,onSave,onCancel,showLane,showHideGuest}){
   </div>;
 }
 
-function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,setDragTask,setDragOver,members}){
+function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,setDragTask,setDragOver,members,onUpdateTask}){
   const [exp,setExp]=useState(false);
   const [dragging,setDragging]=useState(false);
+  const [newSub,setNewSub]=useState("");
   const pm=PRIO_META[task.prio]||PRIO_META.medium;
   const assignees=(members||[]).filter(m=>(task.mids||[]).includes(m.id));
+  const subs=task.subtasks||[];
+  const subsDone=subs.filter(s=>s.done).length;
+  const est=ESTIMATES.find(e=>e.val===task.estimate);
+
+  const toggleSub=(sid)=>onUpdateTask&&onUpdateTask(task.id,{subtasks:subs.map(s=>s.id===sid?{...s,done:!s.done}:s)});
+  const addSub=()=>{if(!newSub.trim())return;onUpdateTask&&onUpdateTask(task.id,{subtasks:[...subs,{id:Date.now(),title:newSub.trim(),done:false}]});setNewSub("");};
+  const delSub=(sid)=>onUpdateTask&&onUpdateTask(task.id,{subtasks:subs.filter(s=>s.id!==sid)});
+
   return <div key={task.id} draggable
     onDragStart={()=>{setDragTask(task.id);setDragging(true);}}
     onDragEnd={()=>{setDragTask(null);setDragOver(null);setDragging(false);}}
@@ -425,7 +443,9 @@ function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,set
         <div style={{display:"flex",gap:2,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
           <span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:pm.bg,color:pm.color,fontWeight:700}}>{pm.icon}</span>
           {task.recur!=="none"&&<span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:T.blueBg,color:T.blue,fontWeight:700}}>🔁</span>}
-          {task.tags.slice(0,2).map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
+          {est&&est.val!=="none"&&<span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:T.blueBg+"88",color:T.blue,fontWeight:600}}>{est.icon} {est.label}</span>}
+          {subs.length>0&&<span style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:subsDone===subs.length?T.greenBg:T.surface,color:subsDone===subs.length?T.green:T.textDim,fontWeight:700}}>☑ {subsDone}/{subs.length}</span>}
+          {(task.tags||[]).slice(0,1).map(tg=>{const tc=TAG_COLORS[tg]||{bg:"#eee",text:"#666"};return <span key={tg} style={{fontSize:8,padding:"1px 4px",borderRadius:999,background:tc.bg,color:tc.text,fontWeight:700}}>{tg}</span>;})}
         </div>
       </div>
       {assignees.length>0&&<div style={{display:"flex",marginRight:2}}>
@@ -433,8 +453,23 @@ function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,set
       </div>}
       <button onClick={()=>setExp(e=>!e)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.textDim,padding:"6px 8px",lineHeight:1,transform:exp?"rotate(0)":"rotate(-90deg)",transition:"transform .2s",flexShrink:0}}>▾</button>
     </div>
+    {subs.length>0&&!exp&&<div style={{height:3,background:T.border,margin:"0 9px 6px"}}><div style={{height:"100%",borderRadius:2,background:subsDone===subs.length?T.green:T.amber,width:`${subs.length?subsDone/subs.length*100:0}%`,transition:"width .3s"}}/></div>}
     {exp&&<div style={{padding:"0 9px 8px",borderTop:`1px solid ${T.border}`,paddingTop:7,display:"flex",flexDirection:"column",gap:5}}>
       {task.desc&&<p style={{fontSize:10,color:T.textMid,lineHeight:1.4}}>{task.desc}</p>}
+      {/* Subtasks */}
+      {subs.length>0&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
+        {subs.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:6}}>
+          <button onClick={()=>toggleSub(s.id)} style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${s.done?T.green:T.border}`,background:s.done?T.greenBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,padding:0}}>
+            {s.done&&<span style={{color:T.green,fontSize:9,fontWeight:700}}>✓</span>}
+          </button>
+          <span style={{fontSize:10,color:s.done?T.textDim:T.text,textDecoration:s.done?"line-through":"none",flex:1}}>{s.title}</span>
+          <button onClick={()=>delSub(s.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:9,color:T.textDim,padding:"0 2px"}}>✕</button>
+        </div>)}
+      </div>}
+      <div style={{display:"flex",gap:4}}>
+        <input value={newSub} onChange={e=>setNewSub(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSub()} placeholder="+ Ny undertask..." style={{flex:1,padding:"4px 7px",borderRadius:6,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:10,fontFamily:"inherit",outline:"none"}}/>
+        <button onClick={addSub} style={{padding:"4px 8px",borderRadius:6,border:"none",background:T.amber,color:"#fff",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>+</button>
+      </div>
       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
         {LANES.filter(l=>l.id!==task.lane).map(l=><button key={l.id} onClick={()=>moveTask(task.id,l.id)} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${l.color}44`,background:l.bg,color:l.color,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>→ {l.label}</button>)}
         <button onClick={()=>moveUp(task.id)} disabled={idx===0} style={{padding:"5px 11px",borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:idx===0?T.textDim:T.text,fontSize:11,cursor:idx===0?"default":"pointer",fontFamily:"inherit"}}>↑</button>
@@ -446,13 +481,14 @@ function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,set
   </div>;
 }
 
-function KanbanBoard({T,tasks,setTasks,members,guestMode}){
+function KanbanBoard({T,tasks,setTasks,members,guestMode,epics}){
   const [filterMid,setFilterMid]=useState("all");
   const [editing,setEditing]=useState(null);
   const [dragTask,setDragTask]=useState(null);
   const [dragOver,setDragOver]=useState(null);
   const moveTask=(id,lane)=>setTasks(p=>p.map(t=>t.id===id?{...t,lane}:t));
   const delTask=id=>setTasks(p=>p.filter(t=>t.id!==id));
+  const updateTask=(id,changes)=>setTasks(p=>p.map(t=>t.id===id?{...t,...changes}:t));
   const moveUp=(id)=>setTasks(p=>{const lane=p.find(t=>t.id===id)?.lane;const il=p.filter(t=>t.lane===lane).sort((a,b)=>a.order-b.order);const idx=il.findIndex(t=>t.id===id);if(idx===0)return p;const no=[...il];[no[idx-1],no[idx]]=[no[idx],no[idx-1]];const om=Object.fromEntries(no.map((t,i)=>[t.id,i]));return p.map(t=>om[t.id]!==undefined?{...t,order:om[t.id]}:t);});
   const moveDown=(id)=>setTasks(p=>{const lane=p.find(t=>t.id===id)?.lane;const il=p.filter(t=>t.lane===lane).sort((a,b)=>a.order-b.order);const idx=il.findIndex(t=>t.id===id);if(idx===il.length-1)return p;const no=[...il];[no[idx],no[idx+1]]=[no[idx+1],no[idx]];const om=Object.fromEntries(no.map((t,i)=>[t.id,i]));return p.map(t=>om[t.id]!==undefined?{...t,order:om[t.id]}:t);});
   const saveTask=(f)=>{if(editing==="new")setTasks(p=>[...p,{...makeTask(),...f,id:Date.now(),order:p.filter(t=>t.lane===f.lane).length}]);else setTasks(p=>p.map(t=>t.id===editing.id?{...t,...f}:t));setEditing(null);};
@@ -470,7 +506,7 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode}){
       </div>
       <button onClick={()=>setEditing("new")} style={{flexShrink:0,padding:"3px 11px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Ny uppgift</button>
     </div>
-    {editing&&<div style={{padding:"0 10px 8px",flexShrink:0}}><TaskForm T={T} members={members} init={editing!=="new"?{...editing}:{...EMPTY_FORM}} onSave={saveTask} onCancel={()=>setEditing(null)} showLane showHideGuest/></div>}
+    {editing&&<div style={{padding:"0 10px 8px",flexShrink:0}}><TaskForm T={T} members={members} init={editing!=="new"?{...editing}:{...EMPTY_FORM}} onSave={saveTask} onCancel={()=>setEditing(null)} showLane showHideGuest epics={epics}/></div>}
     <div style={{flex:1,overflow:"hidden",display:"flex"}}>
       {LANES.map((lane,li)=>{
         const lt=getLane(lane.id);
@@ -486,7 +522,7 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode}){
             {lt.length===0&&<div style={{textAlign:"center",padding:"16px 8px",color:T.textDim,fontSize:10,border:`1px dashed ${T.border}`,borderRadius:7,marginTop:3}}>Dra hit</div>}
             {lt.map((task,idx)=>{
               if(guestMode&&task.hideGuest)return null;
-              return <TaskCard key={task.id} T={T} task={task} idx={idx} lt={lt} moveTask={moveTask} moveUp={moveUp} moveDown={moveDown} setEditing={setEditing} delTask={delTask} setDragTask={setDragTask} setDragOver={setDragOver} members={members}/>;
+              return <TaskCard key={task.id} T={T} task={task} idx={idx} lt={lt} moveTask={moveTask} moveUp={moveUp} moveDown={moveDown} setEditing={setEditing} delTask={delTask} setDragTask={setDragTask} setDragOver={setDragOver} members={members} onUpdateTask={updateTask}/>;
             })}
           </div>
         </div>;
@@ -555,11 +591,14 @@ function TemplateEditor({T,members,init,onSave,onCancel}){
 }
 
 /* ═══ PLANNING ══════════════════════════════════════════════════ */
-function PlanningTab({T,backlog,setBacklog,tasks,setTasks,members,templates,setTemplates}){
-  const [planView,setPlanView]=useState("backlog"); // backlog | templates
+function PlanningTab({T,backlog,setBacklog,tasks,setTasks,members,templates,setTemplates,epics,setEpics}){
+  const [planView,setPlanView]=useState("backlog"); // backlog | templates | epics
   const [editing,setEditing]=useState(null);
   const [editTmpl,setEditTmpl]=useState(null); // null | "new" | {template obj}
   const [expandedTmpl,setExpandedTmpl]=useState(null);
+  const [newEpic,setNewEpic]=useState({title:"",icon:"🎯",desc:""});
+  const addEpic=()=>{if(!newEpic.title.trim())return;setEpics(p=>[...p,{...newEpic,id:Date.now(),createdAt:Date.now()}]);setNewEpic({title:"",icon:"🎯",desc:""});};
+  const delEpic=(id)=>setEpics(p=>p.filter(e=>e.id!==id));
 
   // ── Backlog ──────────────────────────────────────────────────
   const saveToBacklog=(f)=>{if(editing==="new")setBacklog(p=>[...p,{...makeTask(),...f,id:Date.now()}]);else setBacklog(p=>p.map(b=>b.id===editing.id?{...b,...f}:b));setEditing(null);};
@@ -595,7 +634,7 @@ function PlanningTab({T,backlog,setBacklog,tasks,setTasks,members,templates,setT
           style={{padding:"3px 11px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Ny</button>
       </div>
       <div style={{display:"flex"}}>
-        {[["backlog","📋 Backlogg"],["templates","📦 Mallar"]].map(([id,label])=>(
+        {[["backlog","📋 Backlogg"],["templates","📦 Mallar"],["epics","🎯 Epics"]].map(([id,label])=>(
           <button key={id} onClick={()=>setPlanView(id)} style={{
             flex:1,padding:"6px 4px",border:"none",
             borderBottom:`2.5px solid ${planView===id?T.amber:"transparent"}`,
@@ -696,6 +735,47 @@ function PlanningTab({T,backlog,setBacklog,tasks,setTasks,members,templates,setT
               style={{width:"100%",padding:"6px",borderRadius:8,border:`1px solid ${T.green}33`,background:T.greenBg,color:T.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
               ✅ Aktivera — {tmpl.tasks.length} uppgifter → Tavlan
             </button>
+          </div>}
+        </div>;
+      })}
+    </div>}
+
+    {/* ── EPICS ── */}
+    {planView==="epics"&&<div style={{flex:1,overflowY:"auto",padding:"9px 14px 12px",display:"flex",flexDirection:"column",gap:8}}>
+      {/* Skapa nytt epic */}
+      <div style={{background:T.card,borderRadius:12,border:`1.5px solid ${T.amber}`,padding:12}}>
+        <p style={{fontSize:10,fontWeight:700,color:T.amber,marginBottom:8}}>🎯 Nytt epic</p>
+        <div style={{display:"flex",gap:6,marginBottom:7}}>
+          <input value={newEpic.icon} onChange={e=>setNewEpic(p=>({...p,icon:e.target.value}))} style={{width:40,padding:"6px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:18,textAlign:"center",fontFamily:"inherit",outline:"none"}}/>
+          <input value={newEpic.title} onChange={e=>setNewEpic(p=>({...p,title:e.target.value}))} placeholder="Epicets titel, t.ex. Renovera badrum" style={{flex:1,padding:"6px 10px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+        </div>
+        <input value={newEpic.desc} onChange={e=>setNewEpic(p=>({...p,desc:e.target.value}))} placeholder="Beskrivning (valfri)" style={{width:"100%",padding:"6px 10px",borderRadius:7,border:`1px solid ${T.border}`,background:T.surface,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",boxSizing:"border-box",marginBottom:7}}/>
+        <button onClick={addEpic} style={{width:"100%",padding:"6px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Skapa epic</button>
+      </div>
+      {(epics||[]).length===0&&<div style={{textAlign:"center",padding:"24px",color:T.textDim,fontSize:11,border:`1px dashed ${T.border}`,borderRadius:10}}>Inga epics ännu. Skapa ett ovan.</div>}
+      {(epics||[]).map(ep=>{
+        const linked=tasks.filter(t=>t.epicId===String(ep.id));
+        const done=linked.filter(t=>t.lane==="done").length;
+        const pct=linked.length?Math.round(done/linked.length*100):0;
+        return <div key={ep.id} style={{background:T.card,borderRadius:12,border:`1px solid ${T.border}`,padding:"11px 12px",boxShadow:T.shadow}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <span style={{fontSize:22}}>{ep.icon}</span>
+            <div style={{flex:1}}>
+              <p style={{fontSize:13,fontWeight:700,color:T.text}}>{ep.title}</p>
+              {ep.desc&&<p style={{fontSize:10,color:T.textDim,marginTop:2}}>{ep.desc}</p>}
+            </div>
+            <button onClick={()=>delEpic(ep.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:12,padding:"2px 4px"}}>🗑</button>
+          </div>
+          <div style={{height:6,background:T.border,borderRadius:3,marginBottom:6,overflow:"hidden"}}>
+            <div style={{height:"100%",background:pct===100?T.green:T.amber,width:`${pct}%`,borderRadius:3,transition:"width .4s"}}/>
+          </div>
+          <p style={{fontSize:9,color:T.textDim,marginBottom:6}}>{done}/{linked.length} tasks klara · {pct}%</p>
+          {linked.length>0&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {linked.map(t=><div key={t.id} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0"}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:t.lane==="done"?T.green:t.lane==="progress"?T.amber:T.border,flexShrink:0}}/>
+              <span style={{fontSize:10,color:t.lane==="done"?T.textDim:T.text,textDecoration:t.lane==="done"?"line-through":"none",flex:1}}>{t.title}</span>
+              <span style={{fontSize:8,color:T.textDim}}>{LANES.find(l=>l.id===t.lane)?.label}</span>
+            </div>)}
           </div>}
         </div>;
       })}
@@ -1564,6 +1644,7 @@ export default function App(){
   const [choresDone,setChoresDone]=useLocalStorage("fp_chores_done",{});
   const [choresList,setChoresList]=useLocalStorage("fp_chores_list",null); // null = använd CHORES_LIST från constants
   const [templates,setTemplates]=useLocalStorage("fp_templates",DEFAULT_TEMPLATES);
+  const [epics,setEpics]=useLocalStorage("fp_epics",[]);
 
   const T=cfg.dark?THEMES.dark:THEMES.light;
   const toggleMed=(fid,idx)=>setFlowMeds(p=>{const arr=[...p[fid]];arr[idx]={...arr[idx],done:!arr[idx].done};return{...p,[fid]:arr};});
@@ -1673,8 +1754,8 @@ export default function App(){
                 ))}
               </div>
               <div style={{flex:1,overflow:"hidden",background:T.card,backdropFilter:T.blur}}>
-                {activeTab==="kanban"&&<KanbanBoard T={T} tasks={tasks} setTasks={setTasks} members={family.members} guestMode={cfg.guestMode}/>}
-                {activeTab==="planning"&&<PlanningTab T={T} backlog={backlog} setBacklog={setBacklog} tasks={tasks} setTasks={setTasks} members={family.members} templates={templates} setTemplates={setTemplates}/>}
+                {activeTab==="kanban"&&<KanbanBoard T={T} tasks={tasks} setTasks={setTasks} members={family.members} guestMode={cfg.guestMode} epics={epics}/>}
+                {activeTab==="planning"&&<PlanningTab T={T} backlog={backlog} setBacklog={setBacklog} tasks={tasks} setTasks={setTasks} members={family.members} templates={templates} setTemplates={setTemplates} epics={epics} setEpics={setEpics}/>}
                 {activeTab==="sysslor"&&<KidsPointsTab T={T} members={family.members} choresDone={choresDone} setChoresDone={setChoresDone} choresList={choresList||CHORES_LIST}/>}
                 {activeTab==="smarthome"&&<div style={{padding:"20px",color:T.textMid,fontSize:13,textAlign:"center",paddingTop:40}}>🏠 Smarta hem<br/><span style={{fontSize:11,color:T.textDim}}>Roborock, Spotify, Hue & Nest</span></div>}
               </div>

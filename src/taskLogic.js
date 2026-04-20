@@ -36,6 +36,9 @@ export function makeTask(overrides = {}) {
     recur:     "none",
     hideGuest: false,
     order:     0,
+    estimate:  "none",   // "none"|"30min"|"2h"|"half"|"day"
+    subtasks:  [],       // [{id,title,done}]
+    epicId:    null,     // koppling till epic
     ...overrides,
   };
 }

@@ -1782,6 +1782,147 @@ function CarHouseTab({T,carReminders,setCarReminders,houseItems,setHouseItems}){
   </div>;
 }
 
+/* ═══ EKONOMI ═══════════════════════════════════════════════════ */
+const EXPENSE_CATS=["Boende","Mat","Transport","Nöje","Kläder","Hälsa","Övrigt"];
+const SPARTIPS=[
+  "Byt till LED-lampor — sparar ~600 kr/år","Handla med inköpslista och minska matsvinnet",
+  "Jämför försäkringar en gång per år","Pausa prenumerationer du inte använder",
+  "Sätt av 10% av lönen automatiskt första dagen","Köp vinterkläder på sommarsea och tvärtom",
+  "Byt till ett rörligt elavtal om spotpriset är lågt","Planera veckomenyn och handla en gång per vecka",
+  "Säg upp gymkort om du inte går dit","Laga mat hemma istället för takeaway tre kvällar/vecka",
+];
+function EkonomiTab({T,budget,setBudget}){
+  const now=new Date();
+  const [view,setView]=useState("budget"); // budget|kalender|tips
+  const [month,setMonth]=useState(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`);
+  const [showForm,setShowForm]=useState(false);
+  const [form,setForm]=useState({label:"",amount:"",cat:EXPENSE_CATS[0],type:"expense",day:now.getDate()});
+
+  const entries=budget.filter(e=>e.month===month);
+  const income=entries.filter(e=>e.type==="income").reduce((s,e)=>s+e.amount,0);
+  const expenses=entries.filter(e=>e.type==="expense").reduce((s,e)=>s+e.amount,0);
+  const balance=income-expenses;
+  const tip=SPARTIPS[now.getDate()%SPARTIPS.length];
+
+  function addEntry(){
+    if(!form.label.trim()||!form.amount)return;
+    setBudget(p=>[...p,{id:Date.now(),month,label:form.label.trim(),amount:Number(form.amount),cat:form.cat,type:form.type,day:Number(form.day)}]);
+    setForm(f=>({...f,label:"",amount:""}));
+    setShowForm(false);
+  }
+  function delEntry(id){setBudget(p=>p.filter(e=>e.id!==id));}
+
+  const catTotals=EXPENSE_CATS.map(c=>({cat:c,total:entries.filter(e=>e.cat===c&&e.type==="expense").reduce((s,e)=>s+e.amount,0)})).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
+  const upcoming=budget.filter(e=>e.type==="expense"&&e.day>=now.getDate()&&e.month===month).sort((a,b)=>a.day-b.day).slice(0,5);
+
+  const btnStyle=(active)=>({padding:"6px 14px",borderRadius:20,border:`1.5px solid ${active?T.amber:T.border}`,background:active?T.amberBg:"transparent",color:active?T.amber:T.textMid,fontSize:11,fontWeight:active?700:400,cursor:"pointer",fontFamily:"inherit"});
+  const inputS={padding:"7px 10px",borderRadius:8,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"};
+
+  return <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:5}}>
+        {[["budget","💰 Budget"],["kalender","📅 Kommande"],["tips","💡 Spartips"]].map(([id,lbl])=>(
+          <button key={id} onClick={()=>setView(id)} style={btnStyle(view===id)}>{lbl}</button>
+        ))}
+      </div>
+      <input type="month" value={month} onChange={e=>setMonth(e.target.value)} style={{...inputS,marginLeft:"auto"}}/>
+    </div>
+
+    {/* Budget view */}
+    {view==="budget"&&<>
+      {/* Summary cards */}
+      <div style={{display:"flex",gap:10}}>
+        {[{lbl:"Inkomst",val:income,c:"#27ae60",bg:"#e9f7ef"},{lbl:"Utgifter",val:expenses,c:"#e74c3c",bg:"#fdecea"},{lbl:"Balans",val:balance,c:balance>=0?"#27ae60":"#e74c3c",bg:balance>=0?"#e9f7ef":"#fdecea"}].map(({lbl,val,c,bg})=>(
+          <div key={lbl} style={{flex:1,background:bg,borderRadius:10,padding:"10px 12px",border:`1px solid ${c}33`}}>
+            <p style={{fontSize:9,color:c,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",margin:"0 0 2px"}}>{lbl}</p>
+            <p style={{fontSize:18,fontWeight:700,color:c,margin:0}}>{val.toLocaleString("sv-SE")} kr</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Category breakdown */}
+      {catTotals.length>0&&<div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,padding:"10px 12px"}}>
+        <p style={{fontSize:9,color:T.textDim,letterSpacing:1.3,textTransform:"uppercase",margin:"0 0 8px"}}>Kategorifördelning</p>
+        {catTotals.map(({cat,total})=>(
+          <div key={cat} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <span style={{fontSize:10,color:T.text,width:80,flexShrink:0}}>{cat}</span>
+            <div style={{flex:1,background:T.border,borderRadius:4,height:6,overflow:"hidden"}}>
+              <div style={{height:"100%",borderRadius:4,background:T.amber,width:`${Math.min(100,(total/Math.max(expenses,1))*100)}%`,transition:"width .3s"}}/>
+            </div>
+            <span style={{fontSize:10,color:T.textMid,width:70,textAlign:"right"}}>{total.toLocaleString("sv-SE")} kr</span>
+          </div>
+        ))}
+      </div>}
+
+      {/* Entries list */}
+      <div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",padding:"8px 12px",borderBottom:`1px solid ${T.border}`}}>
+          <span style={{fontSize:11,fontWeight:700,color:T.text,flex:1}}>Transaktioner</span>
+          <button onClick={()=>setShowForm(f=>!f)} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${T.amber}`,background:T.amberBg,color:T.amber,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Lägg till</button>
+        </div>
+        {showForm&&<div style={{padding:"10px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <input value={form.label} onChange={e=>setForm(f=>({...f,label:e.target.value}))} placeholder="Beskrivning" style={{...inputS,flex:2,minWidth:120}}/>
+            <input value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="Belopp kr" type="number" min="0" style={{...inputS,flex:1,minWidth:80}}/>
+            <input value={form.day} onChange={e=>setForm(f=>({...f,day:e.target.value}))} placeholder="Dag" type="number" min="1" max="31" style={{...inputS,width:60}}/>
+          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <select value={form.cat} onChange={e=>setForm(f=>({...f,cat:e.target.value}))} style={{...inputS,flex:1}}>
+              {EXPENSE_CATS.map(c=><option key={c}>{c}</option>)}
+            </select>
+            <select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} style={{...inputS,flex:1}}>
+              <option value="expense">Utgift</option>
+              <option value="income">Inkomst</option>
+            </select>
+            <button onClick={addEntry} style={{padding:"7px 14px",borderRadius:8,border:"none",background:T.amber,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Spara</button>
+          </div>
+        </div>}
+        {entries.length===0&&<p style={{padding:"14px",fontSize:11,color:T.textDim,textAlign:"center"}}>Inga transaktioner för {month}. Lägg till ovan.</p>}
+        {entries.sort((a,b)=>b.day-a.day).map(e=>(
+          <div key={e.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${T.border}`}}>
+            <span style={{fontSize:10,color:T.textDim,width:24,textAlign:"center"}}>{e.day}</span>
+            <span style={{flex:1,fontSize:11,color:T.text}}>{e.label}</span>
+            <span style={{fontSize:9,padding:"1px 7px",borderRadius:999,background:T.surface,color:T.textDim}}>{e.cat}</span>
+            <span style={{fontSize:11,fontWeight:700,color:e.type==="income"?"#27ae60":"#e74c3c",width:80,textAlign:"right"}}>{e.type==="income"?"+":"-"}{e.amount.toLocaleString("sv-SE")} kr</span>
+            <button onClick={()=>delEntry(e.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:13}}>✕</button>
+          </div>
+        ))}
+      </div>
+    </>}
+
+    {/* Kommande view */}
+    {view==="kalender"&&<div style={{background:T.card,borderRadius:10,border:`1px solid ${T.border}`,overflow:"hidden"}}>
+      <p style={{padding:"10px 12px",fontSize:9,color:T.textDim,letterSpacing:1.3,textTransform:"uppercase",margin:0,borderBottom:`1px solid ${T.border}`}}>Kommande betalningar denna månad</p>
+      {upcoming.length===0?<p style={{padding:"14px",fontSize:11,color:T.textDim,textAlign:"center"}}>Inga kommande utgifter registrerade.</p>:upcoming.map(e=>(
+        <div key={e.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderBottom:`1px solid ${T.border}`}}>
+          <div style={{width:32,height:32,borderRadius:8,background:T.amberBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:12,fontWeight:700,color:T.amber}}>{e.day}</span>
+          </div>
+          <div style={{flex:1}}><p style={{fontSize:11,color:T.text,fontWeight:600,margin:0}}>{e.label}</p><p style={{fontSize:9,color:T.textDim,margin:0}}>{e.cat}</p></div>
+          <span style={{fontSize:12,fontWeight:700,color:"#e74c3c"}}>{e.amount.toLocaleString("sv-SE")} kr</span>
+        </div>
+      ))}
+    </div>}
+
+    {/* Spartips view */}
+    {view==="tips"&&<>
+      <div style={{background:"#fffbea",borderRadius:12,border:"1px solid #f0d060",padding:"14px 16px",marginBottom:4}}>
+        <p style={{fontSize:9,color:"#b8860b",fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",margin:"0 0 4px"}}>💡 Dagens tips</p>
+        <p style={{fontSize:13,color:"#5A4E3C",fontWeight:600,margin:0,lineHeight:1.5}}>{tip}</p>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {SPARTIPS.map((t,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:9,background:T.card,border:`1px solid ${T.border}`}}>
+            <span style={{fontSize:14,flexShrink:0}}>💡</span>
+            <p style={{fontSize:11,color:T.text,margin:0,lineHeight:1.5}}>{t}</p>
+          </div>
+        ))}
+      </div>
+    </>}
+  </div>;
+}
+
 /* ═══ MAIN APP ══════════════════════════════════════════════════ */
 export default function App(){
   const now=useClock();
@@ -1805,6 +1946,7 @@ export default function App(){
   const [epics,setEpics]=useLocalStorage("fp_epics",[]);
   const [carReminders,setCarReminders]=useLocalStorage("fp_car",[]);
   const [houseItems,setHouseItems]=useLocalStorage("fp_house",[]);
+  const [budget,setBudget]=useLocalStorage("fp_budget",[]);
 
   const T=cfg.dark?THEMES.dark:THEMES.light;
   const toggleMed=(fid,idx)=>setFlowMeds(p=>{
@@ -1822,7 +1964,7 @@ export default function App(){
   const PHOTO="https://images.unsplash.com/photo-1511895426328-dc8714191011?w=1600&q=80";
 
   // 🔧 Smarta hem-fliken är tillfälligt dold — ta bort kommentaren för att aktivera igen:
-  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["bilhus","🚗 Bil & Hus"]];
+  const TABS=[["kanban","📋 Tavlan"],["planning","🗂️ Planering"],["sysslor","⭐ Sysslor"],["bilhus","🚗 Bil & Hus"],["ekonomi","💰 Ekonomi"]];
 
   return <>
     <style>{`
@@ -1925,6 +2067,7 @@ export default function App(){
                 {activeTab==="planning"&&<PlanningTab T={T} backlog={backlog} setBacklog={setBacklog} tasks={tasks} setTasks={setTasks} members={family.members} templates={templates} setTemplates={setTemplates} epics={epics} setEpics={setEpics}/>}
                 {activeTab==="sysslor"&&<KidsPointsTab T={T} members={family.members} choresDone={choresDone} setChoresDone={setChoresDone} choresList={choresList||CHORES_LIST}/>}
                 {activeTab==="bilhus"&&<CarHouseTab T={T} carReminders={carReminders} setCarReminders={setCarReminders} houseItems={houseItems} setHouseItems={setHouseItems}/>}
+                {activeTab==="ekonomi"&&<EkonomiTab T={T} budget={budget} setBudget={setBudget}/>}
               </div>
             </div>
             {/* RIGHT */}

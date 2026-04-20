@@ -814,6 +814,97 @@ function getLevelPct(points){ const l=getLevel(points); return Math.round((point
 // Tomt stats-objekt för en ny familjemedlem
 const emptyStats=()=>({points:0,total:0,streak:0,byCategory:{}});
 
+/* ═══ AKTIVITETSHJULET ══════════════════════════════════════════ */
+const DEFAULT_WHEEL_ITEMS=["Spela brädspel","Baka något gott","Cykla","Rita och måla","Bygga med lego","Titta på film","Leka ute","Vattenlek","Dansa","Pyssel","Lyssna på bok","Friluftsliv"];
+const WHEEL_COLORS=["#FF6B6B","#4ECDC4","#45B7D1","#96CEB4","#FFEAA7","#DDA0DD","#98D8C8","#F7DC6F","#BB8FCE","#85C1E9","#F0B27A","#82E0AA"];
+
+function ActivityWheel({T}){
+  const [items,setItems]=useLocalStorage("fp_wheel_items",DEFAULT_WHEEL_ITEMS);
+  const [spinning,setSpinning]=useState(false);
+  const [result,setResult]=useState(null);
+  const [rotation,setRotation]=useState(0);
+  const [newItem,setNewItem]=useState("");
+
+  function spin(){
+    if(spinning||items.length===0)return;
+    setSpinning(true);
+    setResult(null);
+    const idx=Math.floor(Math.random()*items.length);
+    const spins=5+Math.random()*5; // 5-10 full rotations
+    const segAngle=360/items.length;
+    const targetAngle=360*spins+(360-idx*segAngle-segAngle/2);
+    const newRot=rotation+targetAngle;
+    setRotation(newRot);
+    setTimeout(()=>{setResult(items[idx]);setSpinning(false);},3200);
+  }
+
+  function addItem(){
+    if(!newItem.trim()||items.includes(newItem.trim()))return;
+    setItems(p=>[...p,newItem.trim()]);
+    setNewItem("");
+  }
+
+  const size=240;
+  const cx=size/2, cy=size/2, r=size/2-4;
+  const segAngle=items.length>0?360/items.length:360;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,padding:"16px",alignItems:"center"}}>
+    {/* Wheel */}
+    <div style={{position:"relative",width:size,height:size}}>
+      <svg width={size} height={size} style={{transform:`rotate(${rotation}deg)`,transition:spinning?"transform 3.2s cubic-bezier(0.17,0.67,0.12,0.99)":"none",display:"block"}}>
+        {items.map((item,i)=>{
+          const a1=(i*segAngle-90)*Math.PI/180;
+          const a2=((i+1)*segAngle-90)*Math.PI/180;
+          const x1=cx+r*Math.cos(a1), y1=cy+r*Math.sin(a1);
+          const x2=cx+r*Math.cos(a2), y2=cy+r*Math.sin(a2);
+          const largeArc=segAngle>180?1:0;
+          const mid=((i+0.5)*segAngle-90)*Math.PI/180;
+          const tx=cx+(r*0.62)*Math.cos(mid), ty=cy+(r*0.62)*Math.sin(mid);
+          const shortLabel=item.length>12?item.slice(0,10)+"…":item;
+          return <g key={i}>
+            <path d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} Z`} fill={WHEEL_COLORS[i%WHEEL_COLORS.length]} stroke="#fff" strokeWidth="2"/>
+            <text x={tx} y={ty} textAnchor="middle" dominantBaseline="middle" fontSize={items.length>8?9:11} fontWeight="600" fill="#fff" transform={`rotate(${(i+0.5)*segAngle},${tx},${ty})`} style={{textShadow:"0 1px 2px rgba(0,0,0,0.4)",pointerEvents:"none"}}>{shortLabel}</text>
+          </g>;
+        })}
+        <circle cx={cx} cy={cy} r={16} fill="#fff" stroke="#ddd" strokeWidth="2"/>
+      </svg>
+      {/* Pointer */}
+      <div style={{position:"absolute",top:-8,left:"50%",transform:"translateX(-50%)",fontSize:24,filter:"drop-shadow(0 2px 3px rgba(0,0,0,0.3))"}}>▼</div>
+    </div>
+
+    {/* Result */}
+    {result&&<div style={{background:"linear-gradient(135deg,#667eea,#764ba2)",borderRadius:14,padding:"12px 24px",textAlign:"center",color:"#fff",minWidth:200}}>
+      <p style={{fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",margin:"0 0 4px",opacity:0.8}}>Aktivitet idag!</p>
+      <p style={{fontSize:18,fontWeight:700,margin:0}}>{result}</p>
+    </div>}
+
+    <button onClick={spin} disabled={spinning||items.length<2} style={{padding:"12px 32px",borderRadius:999,border:"none",background:spinning?"#ccc":"linear-gradient(135deg,#667eea,#764ba2)",color:"#fff",fontSize:14,fontWeight:700,cursor:spinning?"default":"pointer",boxShadow:"0 4px 15px rgba(102,126,234,0.4)",transition:"all .2s"}}>
+      {spinning?"Snurrar…":"🎡 Snurra!"}
+    </button>
+
+    {/* Edit items */}
+    <div style={{width:"100%",maxWidth:400,background:T.card,borderRadius:10,border:`1px solid ${T.border}`,overflow:"hidden"}}>
+      <div style={{padding:"8px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:6}}>
+        <span style={{fontSize:11,fontWeight:700,color:T.text,flex:1}}>Aktiviteter på hjulet</span>
+        <span style={{fontSize:10,color:T.textDim}}>{items.length} st</span>
+      </div>
+      <div style={{display:"flex",gap:5,padding:"8px 10px",borderBottom:`1px solid ${T.border}`}}>
+        <input value={newItem} onChange={e=>setNewItem(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addItem()} placeholder="Ny aktivitet…" style={{flex:1,padding:"5px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+        <button onClick={addItem} style={{padding:"5px 12px",borderRadius:7,border:"none",background:"#667eea",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>+</button>
+      </div>
+      <div style={{maxHeight:180,overflowY:"auto"}}>
+        {items.map((item,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 12px",borderBottom:`1px solid ${T.border}`}}>
+            <span style={{width:10,height:10,borderRadius:"50%",background:WHEEL_COLORS[i%WHEEL_COLORS.length],flexShrink:0,display:"inline-block"}}/>
+            <span style={{flex:1,fontSize:11,color:T.text}}>{item}</span>
+            <button onClick={()=>setItems(p=>p.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:13,lineHeight:1}}>✕</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>;
+}
+
 function KidsPointsTab({T,members,choresDone,setChoresDone,choresList}){
   // Sparade stats per person-id: { [id]: {points, total, streak, byCategory} }
   const [savedStats,setSavedStats]=useLocalStorage("fp_kids_stats",{});
@@ -838,6 +929,7 @@ function KidsPointsTab({T,members,choresDone,setChoresDone,choresList}){
   }));
 
   const [selKid,setSelKid]=useState(activeMembers[0]?.id);
+  const [kidsTab,setKidsTab]=useState("sysslor"); // sysslor | hjul
   const [view,setView]=useState("chores"); // chores | rewards | history
   const [flash,setFlash]=useState(null); // {kidId, points, title}
   const [confetti,setConfetti]=useState([]);
@@ -925,6 +1017,15 @@ function KidsPointsTab({T,members,choresDone,setChoresDone,choresList}){
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden",position:"relative"}}>
+      {/* Tab toggle */}
+      <div style={{display:"flex",gap:6,padding:"8px 14px",borderBottom:`1px solid ${T.border}`,background:T.surface,flexShrink:0}}>
+        {[["sysslor","⭐ Sysslor"],["hjul","🎡 Aktivitetshjulet"]].map(([id,lbl])=>(
+          <button key={id} onClick={()=>setKidsTab(id)} style={{padding:"5px 14px",borderRadius:20,border:`1.5px solid ${kidsTab===id?T.amber:T.border}`,background:kidsTab===id?T.amberBg:"transparent",color:kidsTab===id?T.amber:T.textMid,fontSize:11,fontWeight:kidsTab===id?700:400,cursor:"pointer",fontFamily:"inherit"}}>{lbl}</button>
+        ))}
+      </div>
+
+      {kidsTab==="hjul"&&<div style={{flex:1,overflowY:"auto"}}><ActivityWheel T={T}/></div>}
+      {kidsTab==="sysslor"&&<>
 
       {/* Confetti */}
       {confetti.map(c=>(
@@ -1135,6 +1236,7 @@ function KidsPointsTab({T,members,choresDone,setChoresDone,choresList}){
           ))}
         </>}
       </div>
+      </>}
     </div>
   );
 }

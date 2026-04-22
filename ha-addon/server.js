@@ -65,9 +65,13 @@ app.post('/api/data', (req, res) => {
 // ── Statiska filer (React-bygget) ─────────────────────────────
 app.use(express.static(PUBLIC));
 
-// SPA-fallback — alla okända URL:er skickas till index.html
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(PUBLIC, 'index.html'));
+// SPA-fallback — injicera <base>-tag så HA Ingress-sökvägen fungerar
+app.get('*', (req, res) => {
+  const ingressPath = req.headers['x-ingress-path'] || '';
+  const html = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
+  const patched = html.replace('<head>', `<head><base href="${ingressPath}/">`);
+  res.setHeader('Content-Type', 'text/html');
+  res.send(patched);
 });
 
 // ── Starta ───────────────────────────────────────────────────

@@ -2,6 +2,7 @@
   "name": "familjeplan",
   "version": "1.0.0",
   "private": true,
+  "homepage": ".",
   "dependencies": {
     "@supabase/supabase-js": "^2.103.3",
     "react": "^18.2.0",

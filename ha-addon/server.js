@@ -65,6 +65,18 @@ app.post('/api/data', (req, res) => {
 // ── Statiska filer (React-bygget) ─────────────────────────────
 app.use(express.static(PUBLIC));
 
+// Rot-redirect: HA Ingress saknar trailing slash → redirect till /_app
+// så att relativa URL:er i React-bygget löses korrekt
+app.get('/', (req, res) => {
+  const ingressPath = req.headers['x-ingress-path'] || '';
+  if (ingressPath) {
+    return res.redirect(302, ingressPath + '/_app');
+  }
+  const html = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
 // SPA-fallback — injicera <base>-tag så HA Ingress-sökvägen fungerar
 app.get('*', (req, res) => {
   const ingressPath = req.headers['x-ingress-path'] || '';
@@ -72,6 +84,11 @@ app.get('*', (req, res) => {
   const patched = html.replace('<head>', `<head><base href="${ingressPath}/">`);
   res.setHeader('Content-Type', 'text/html');
   res.send(patched);
+});
+
+// ── Debug ─────────────────────────────────────────────────────
+app.get('/_debug', (req, res) => {
+  res.json({ headers: req.headers, version: '1.1.0-debug' });
 });
 
 // ── Starta ───────────────────────────────────────────────────

@@ -9,7 +9,7 @@ startup: application
 boot: auto
 ports:
   "3000/tcp": 3000
-ingress: true
-ingress_port: 3000
+ports_description:
+  "3000/tcp": "Webbgränssnitt"
 panel_icon: mdi:home-heart
 panel_title: Familjeapp

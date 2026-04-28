@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { id: 'meddelanden', label: 'Meddelanden',    icon: '💬' },
   { id: 'filer',       label: 'Filer & länkar', icon: '📁' },
   { id: 'installningar', label: 'Inställningar', icon: '⚙️' },
+  { id: 'kravdatabas',  label: 'Kravdatabas',   icon: '📊' },
 ];
 
 export default function Sidebar({ activePage, onNavigate, members, unreadCount, focus }) {

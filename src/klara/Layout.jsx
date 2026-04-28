@@ -11,6 +11,7 @@ import Familj from './pages/Familj';
 import Meddelanden from './pages/Meddelanden';
 import FilerLankar from './pages/FilerLankar';
 import Installningar from './pages/Installningar';
+import KravDatabas from './pages/KravDatabas';
 
 // ─── Hjälpfunktion för datum ─────────────────────────────────────────────────
 function daysFromNow(n) {
@@ -84,6 +85,7 @@ export default function KlaraLayout() {
       case 'meddelanden':  return <Meddelanden messages={messages} setMessages={setMessages} members={members} />;
       case 'filer':        return <FilerLankar files={files} setFiles={setFiles} />;
       case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} />;
+      case 'kravdatabas':  return <KravDatabas />;
       default:             return <Hem {...commonProps} />;
     }
   }

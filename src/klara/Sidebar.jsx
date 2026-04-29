@@ -1,31 +1,41 @@
 import React from 'react';
 import { T } from './theme';
+import {
+  Home, Calendar, CheckSquare, FolderOpen,
+  Wrench, Wallet, Star, List, Heart, Bot, BarChart2,
+  Users, MessageCircle, Pill, Settings, User,
+} from 'lucide-react';
 
-const NAV_ITEMS = [
-  { id: 'hem',          label: 'Hem',           icon: '🏠' },
-  { id: 'kalender',     label: 'Kalender',       icon: '📅' },
-  { id: 'uppgifter',    label: 'Uppgifter',      icon: '✅' },
-  { id: 'planering',    label: 'Planering',      icon: '📋' },
-  { id: 'skola',        label: 'Skola',          icon: '🎓' },
-  { id: 'familj',       label: 'Familj',         icon: '👨‍👩‍👧‍👦' },
-  { id: 'meddelanden',  label: 'Meddelanden',    icon: '💬' },
-  { id: 'filer',        label: 'Filer & länkar', icon: '📁' },
-  { id: 'medicin',      label: 'Medicin',        icon: '💊' },
-  { id: 'bilhus',       label: 'Bil & Hus',      icon: '🏠' },
-  { id: 'ekonomi',      label: 'Ekonomi',        icon: '💰' },
-  { id: 'kids',         label: 'Kids & Sysslor', icon: '🎡' },
-  { id: 'listor',       label: 'Listor',         icon: '🪣' },
-  { id: 'wellness',     label: 'Wellness',       icon: '❤️' },
-  { id: 'assistent',    label: 'Assistent',      icon: '🤖' },
-  { id: 'installningar',label: 'Inställningar',  icon: '⚙️' },
-  { id: 'kravdatabas',  label: 'Kravdatabas',    icon: '📊' },
+const ALL_NAV_ITEMS = [
+  { id: 'hem',         label: 'Hem',            Icon: Home,          alwaysOn: true },
+  { id: 'kalender',    label: 'Kalender',        Icon: Calendar },
+  { id: 'uppgifter',   label: 'Uppgifter',       Icon: CheckSquare },
+  { id: 'filer',       label: 'Filer & länkar',  Icon: FolderOpen },
+  { id: 'bilhus',      label: 'Bil & Hus',       Icon: Wrench },
+  { id: 'ekonomi',     label: 'Ekonomi',         Icon: Wallet },
+  { id: 'kids',        label: 'Kids & Sysslor',  Icon: Star },
+  { id: 'listor',      label: 'Listor',          Icon: List },
+  { id: 'wellness',    label: 'Wellness',        Icon: Heart },
+  { id: 'assistent',   label: 'Assistent',       Icon: Bot },
+  { id: 'kravdatabas', label: 'Kravdatabas',     Icon: BarChart2 },
+  // Dolda som standard
+  { id: 'familj',      label: 'Familj',          Icon: Users },
+  { id: 'meddelanden', label: 'Meddelanden',     Icon: MessageCircle },
+  { id: 'medicin',     label: 'Medicin',         Icon: Pill },
 ];
 
-export default function Sidebar({ activePage, onNavigate, members, unreadCount, focus, guestMode, onToggleGuest }) {
+export default function Sidebar({
+  activePage, onNavigate, members, unreadCount,
+  focus, showFocus, guestMode, onToggleGuest, visiblePages = {},
+}) {
+  const NAV_ITEMS = ALL_NAV_ITEMS.filter(item =>
+    item.alwaysOn || visiblePages[item.id]
+  );
+
   return (
     <div style={{
-      width: 240,
-      minWidth: 240,
+      width: 220,
+      minWidth: 220,
       height: '100vh',
       background: T.sidebar,
       display: 'flex',
@@ -34,68 +44,41 @@ export default function Sidebar({ activePage, onNavigate, members, unreadCount, 
       left: 0,
       top: 0,
       zIndex: 100,
-      overflowY: 'auto',
     }}>
       {/* Logo */}
-      <div style={{ padding: '28px 20px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontSize: 26, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.5px' }}>
-            Klara
-          </span>
-          <span style={{ fontSize: 26, fontWeight: 800, color: T.purple }}>.</span>
-        </div>
-        <div style={{ fontSize: 12, color: T.sidebarText, marginTop: 4 }}>
-          Familjeplanering
+      <div style={{ padding: '22px 18px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ fontSize: 24, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.5px' }}>Klara</span>
+          <span style={{ fontSize: 24, fontWeight: 800, color: T.purple }}>.</span>
         </div>
       </div>
 
-      {/* Nav items */}
-      <nav style={{ flex: 1, padding: '12px 12px 0' }}>
+      {/* Nav items — scrollable middle */}
+      <nav style={{ flex: 1, padding: '10px 10px 0', overflowY: 'auto' }}>
         {NAV_ITEMS.map(item => {
-          const isActive = activePage === item.id;
+          const isActive  = activePage === item.id;
           const showBadge = item.id === 'meddelanden' && unreadCount > 0;
+          const { Icon }  = item;
           return (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                width: '100%',
-                padding: '10px 12px',
-                marginBottom: 2,
+                display: 'flex', alignItems: 'center', gap: 10,
+                width: '100%', padding: '9px 11px', marginBottom: 2,
                 background: isActive ? T.sidebarActive : 'transparent',
-                border: 'none',
-                borderRadius: T.radiusSm,
-                cursor: 'pointer',
+                border: 'none', borderRadius: T.radiusSm, cursor: 'pointer',
                 color: isActive ? T.sidebarActiveText : T.sidebarText,
-                fontSize: 14,
-                fontWeight: isActive ? 600 : 400,
-                textAlign: 'left',
-                transition: 'background 0.15s',
-                position: 'relative',
+                fontSize: 13, fontWeight: isActive ? 600 : 400,
+                textAlign: 'left', transition: 'background 0.15s', position: 'relative',
               }}
-              onMouseEnter={e => {
-                if (!isActive) e.currentTarget.style.background = T.sidebarHover;
-              }}
-              onMouseLeave={e => {
-                if (!isActive) e.currentTarget.style.background = 'transparent';
-              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.sidebarHover; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
             >
-              <span style={{ fontSize: 16, lineHeight: 1 }}>{item.icon}</span>
+              <Icon size={15} strokeWidth={isActive ? 2.2 : 1.7} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.72 }} />
               <span style={{ flex: 1 }}>{item.label}</span>
               {showBadge && (
-                <span style={{
-                  background: T.purple,
-                  color: '#fff',
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  padding: '1px 7px',
-                  minWidth: 18,
-                  textAlign: 'center',
-                }}>
+                <span style={{ background: T.purple, color: '#fff', borderRadius: 999, fontSize: 10, fontWeight: 700, padding: '1px 6px', minWidth: 16, textAlign: 'center' }}>
                   {unreadCount}
                 </span>
               )}
@@ -104,39 +87,60 @@ export default function Sidebar({ activePage, onNavigate, members, unreadCount, 
         })}
       </nav>
 
-      {/* Guest mode toggle */}
-      <div style={{ padding: '12px 12px 0' }}>
-        <button
-          onClick={onToggleGuest}
-          style={{
-            width: '100%', padding: '10px 12px', marginBottom: 2,
-            background: guestMode ? T.sidebarActive : 'transparent',
-            border: `1px solid ${guestMode ? T.purple : 'rgba(255,255,255,0.10)'}`,
-            borderRadius: T.radiusSm, cursor: 'pointer',
-            color: guestMode ? T.sidebarActiveText : T.sidebarText,
-            fontSize: 13, fontWeight: guestMode ? 600 : 400,
-            textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
-          }}
-        >
-          <span>👤</span>
-          <span>{guestMode ? 'Gästläge: PÅ' : 'Gästläge'}</span>
-        </button>
-      </div>
-
-      {/* Dagens fokus */}
-      <div style={{ padding: '16px 12px 24px' }}>
-        <div style={{
-          background: T.sidebarHover,
-          borderRadius: T.radiusSm,
-          padding: '14px 14px',
-        }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.sidebarText, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-            ⭐ Dagens fokus
-          </div>
-          <div style={{ fontSize: 13, color: '#CCCCDD', fontStyle: 'italic', lineHeight: 1.5 }}>
-            "{focus}"
+      {/* Dagens fokus — valfri */}
+      {showFocus && focus && (
+        <div style={{ padding: '10px 10px 0', flexShrink: 0 }}>
+          <div style={{ background: T.sidebarHover, borderRadius: T.radiusSm, padding: '12px 14px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.sidebarText, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+              ⭐ Dagens fokus
+            </div>
+            <div style={{ fontSize: 12, color: '#CCCCDD', fontStyle: 'italic', lineHeight: 1.5 }}>
+              "{focus}"
+            </div>
           </div>
         </div>
+      )}
+
+      {/* Bottom bar — Gästläge + Inställningar */}
+      <div style={{
+        padding: '10px', borderTop: '1px solid rgba(255,255,255,0.07)',
+        display: 'flex', gap: 6, flexShrink: 0,
+      }}>
+        {/* Guest toggle */}
+        <button
+          onClick={onToggleGuest}
+          title={guestMode ? 'Stäng av gästläge' : 'Aktivera gästläge'}
+          style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            padding: '9px 0',
+            background: guestMode ? T.sidebarActive : 'transparent',
+            border: `1px solid ${guestMode ? T.purple : 'rgba(255,255,255,0.12)'}`,
+            borderRadius: T.radiusSm, cursor: 'pointer',
+            color: guestMode ? T.sidebarActiveText : T.sidebarText,
+            fontSize: 12, fontWeight: guestMode ? 700 : 400, transition: 'all 0.15s',
+          }}
+        >
+          <User size={14} strokeWidth={guestMode ? 2.2 : 1.7} />
+          <span>{guestMode ? 'Gäst' : 'Gäst'}</span>
+        </button>
+
+        {/* Settings gear */}
+        <button
+          onClick={() => onNavigate('installningar')}
+          title="Inställningar"
+          style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            padding: '9px 0',
+            background: activePage === 'installningar' ? T.sidebarActive : 'transparent',
+            border: `1px solid ${activePage === 'installningar' ? T.purple : 'rgba(255,255,255,0.12)'}`,
+            borderRadius: T.radiusSm, cursor: 'pointer',
+            color: activePage === 'installningar' ? T.sidebarActiveText : T.sidebarText,
+            fontSize: 12, fontWeight: activePage === 'installningar' ? 700 : 400, transition: 'all 0.15s',
+          }}
+        >
+          <Settings size={14} strokeWidth={activePage === 'installningar' ? 2.2 : 1.7} />
+          <span>Inställningar</span>
+        </button>
       </div>
     </div>
   );

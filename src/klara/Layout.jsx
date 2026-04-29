@@ -65,18 +65,41 @@ const defaultFiles = [
   { id: 'f3', name: 'Recept favoriter',        type: 'link', url: '#' },
 ];
 
+// ─── Default meny-synlighet ───────────────────────────────────────────────────
+const DEFAULT_VISIBLE = {
+  hem:           true,   // alltid på
+  kalender:      true,
+  uppgifter:     true,
+  skola:         true,
+  filer:         true,
+  bilhus:        true,
+  ekonomi:       true,
+  kids:          true,
+  listor:        true,
+  wellness:      true,
+  assistent:     true,
+  installningar: true,   // alltid på
+  kravdatabas:   true,
+  // dolda som standard
+  meddelanden:   false,
+  familj:        false,  // hanteras i Inställningar
+  medicin:       false,  // hanteras i Inställningar
+};
+
 // ─── Layout ───────────────────────────────────────────────────────────────────
 export default function KlaraLayout() {
   const [page, setPage] = useState('hem');
   const [guestMode, setGuestMode] = useState(false);
 
-  const [members,  setMembers]  = useLocalStorage('kl_members',  defaultMembers);
-  const [tasks,    setTasks]    = useLocalStorage('kl_tasks',    defaultTasks);
-  const [events,   setEvents]   = useLocalStorage('kl_events',   defaultEvents);
-  const [school,   setSchool]   = useLocalStorage('kl_school',   []);
-  const [messages, setMessages] = useLocalStorage('kl_messages', defaultMessages);
-  const [files,    setFiles]    = useLocalStorage('kl_files',    defaultFiles);
-  const [focus,    setFocus]    = useLocalStorage('kl_focus',    'En sak i taget gör stor skillnad.');
+  const [members,      setMembers]      = useLocalStorage('kl_members',      defaultMembers);
+  const [tasks,        setTasks]        = useLocalStorage('kl_tasks',        defaultTasks);
+  const [events,       setEvents]       = useLocalStorage('kl_events',       defaultEvents);
+  const [school,       setSchool]       = useLocalStorage('kl_school',       []);
+  const [messages,     setMessages]     = useLocalStorage('kl_messages',     defaultMessages);
+  const [files,        setFiles]        = useLocalStorage('kl_files',        defaultFiles);
+  const [focus,        setFocus]        = useLocalStorage('kl_focus',        'En sak i taget gör stor skillnad.');
+  const [visiblePages, setVisiblePages] = useLocalStorage('kl_visible_pages', DEFAULT_VISIBLE);
+  const [showFocus,    setShowFocus]    = useLocalStorage('kl_show_focus',    false);
 
   const unreadCount = messages.filter(m => !m.read).length;
 
@@ -84,15 +107,15 @@ export default function KlaraLayout() {
 
   function renderPage() {
     switch (page) {
-      case 'hem':          return <Hem {...commonProps} guestMode={guestMode} />;
-      case 'kalender':     return <Kalender events={events} members={members} setEvents={setEvents} />;
+      case 'hem':          return <Hem {...commonProps} setTasks={setTasks} guestMode={guestMode} />;
+      case 'kalender':     return <Kalender events={events} members={members} setEvents={setEvents} school={school} setSchool={setSchool} initialView="kalender" />;
       case 'uppgifter':    return <Uppgifter tasks={tasks} setTasks={setTasks} members={members} />;
-      case 'planering':    return <Planering events={events} members={members} setEvents={setEvents} />;
-      case 'skola':        return <Skola school={school} setSchool={setSchool} members={members} />;
+      case 'planering':    return <Kalender events={events} members={members} setEvents={setEvents} school={school} setSchool={setSchool} initialView="planering" />;
+      case 'skola':        return <Kalender events={events} members={members} setEvents={setEvents} school={school} setSchool={setSchool} initialView="skola" />;
       case 'familj':       return <Familj members={members} setMembers={setMembers} tasks={tasks} events={events} />;
       case 'meddelanden':  return <Meddelanden messages={messages} setMessages={setMessages} members={members} />;
       case 'filer':        return <FilerLankar files={files} setFiles={setFiles} />;
-      case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} />;
+      case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} visiblePages={visiblePages} setVisiblePages={setVisiblePages} onNavigate={setPage} showFocus={showFocus} setShowFocus={setShowFocus} />;
       case 'kravdatabas':  return <KravDatabas />;
       case 'medicin':      return <Medicin members={members} guestMode={guestMode} />;
       case 'bilhus':       return <BilHus />;
@@ -113,11 +136,13 @@ export default function KlaraLayout() {
         members={members}
         unreadCount={unreadCount}
         focus={focus}
+        showFocus={showFocus}
         guestMode={guestMode}
         onToggleGuest={() => setGuestMode(g => !g)}
+        visiblePages={visiblePages}
       />
       <main style={{
-        marginLeft: 240,
+        marginLeft: 220,
         flex: 1,
         minHeight: '100vh',
         background: T.bg,

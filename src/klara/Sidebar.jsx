@@ -2,19 +2,26 @@ import React from 'react';
 import { T } from './theme';
 
 const NAV_ITEMS = [
-  { id: 'hem',         label: 'Hem',           icon: '🏠' },
-  { id: 'kalender',    label: 'Kalender',       icon: '📅' },
-  { id: 'uppgifter',   label: 'Uppgifter',      icon: '✅' },
-  { id: 'planering',   label: 'Planering',      icon: '📋' },
-  { id: 'skola',       label: 'Skola',          icon: '🎓' },
-  { id: 'familj',      label: 'Familj',         icon: '👨‍👩‍👧‍👦' },
-  { id: 'meddelanden', label: 'Meddelanden',    icon: '💬' },
-  { id: 'filer',       label: 'Filer & länkar', icon: '📁' },
-  { id: 'installningar', label: 'Inställningar', icon: '⚙️' },
-  { id: 'kravdatabas',  label: 'Kravdatabas',   icon: '📊' },
+  { id: 'hem',          label: 'Hem',           icon: '🏠' },
+  { id: 'kalender',     label: 'Kalender',       icon: '📅' },
+  { id: 'uppgifter',    label: 'Uppgifter',      icon: '✅' },
+  { id: 'planering',    label: 'Planering',      icon: '📋' },
+  { id: 'skola',        label: 'Skola',          icon: '🎓' },
+  { id: 'familj',       label: 'Familj',         icon: '👨‍👩‍👧‍👦' },
+  { id: 'meddelanden',  label: 'Meddelanden',    icon: '💬' },
+  { id: 'filer',        label: 'Filer & länkar', icon: '📁' },
+  { id: 'medicin',      label: 'Medicin',        icon: '💊' },
+  { id: 'bilhus',       label: 'Bil & Hus',      icon: '🏠' },
+  { id: 'ekonomi',      label: 'Ekonomi',        icon: '💰' },
+  { id: 'kids',         label: 'Kids & Sysslor', icon: '🎡' },
+  { id: 'listor',       label: 'Listor',         icon: '🪣' },
+  { id: 'wellness',     label: 'Wellness',       icon: '❤️' },
+  { id: 'assistent',    label: 'Assistent',      icon: '🤖' },
+  { id: 'installningar',label: 'Inställningar',  icon: '⚙️' },
+  { id: 'kravdatabas',  label: 'Kravdatabas',    icon: '📊' },
 ];
 
-export default function Sidebar({ activePage, onNavigate, members, unreadCount, focus }) {
+export default function Sidebar({ activePage, onNavigate, members, unreadCount, focus, guestMode, onToggleGuest }) {
   return (
     <div style={{
       width: 240,
@@ -96,6 +103,25 @@ export default function Sidebar({ activePage, onNavigate, members, unreadCount, 
           );
         })}
       </nav>
+
+      {/* Guest mode toggle */}
+      <div style={{ padding: '12px 12px 0' }}>
+        <button
+          onClick={onToggleGuest}
+          style={{
+            width: '100%', padding: '10px 12px', marginBottom: 2,
+            background: guestMode ? T.sidebarActive : 'transparent',
+            border: `1px solid ${guestMode ? T.purple : 'rgba(255,255,255,0.10)'}`,
+            borderRadius: T.radiusSm, cursor: 'pointer',
+            color: guestMode ? T.sidebarActiveText : T.sidebarText,
+            fontSize: 13, fontWeight: guestMode ? 600 : 400,
+            textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
+          }}
+        >
+          <span>👤</span>
+          <span>{guestMode ? 'Gästläge: PÅ' : 'Gästläge'}</span>
+        </button>
+      </div>
 
       {/* Dagens fokus */}
       <div style={{ padding: '16px 12px 24px' }}>

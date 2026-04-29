@@ -12,6 +12,13 @@ import Meddelanden from './pages/Meddelanden';
 import FilerLankar from './pages/FilerLankar';
 import Installningar from './pages/Installningar';
 import KravDatabas from './pages/KravDatabas';
+import Medicin from './pages/Medicin';
+import BilHus from './pages/BilHus';
+import Ekonomi from './pages/Ekonomi';
+import Kids from './pages/Kids';
+import Listor from './pages/Listor';
+import Wellness from './pages/Wellness';
+import Assistent from './pages/Assistent';
 
 // ─── Hjälpfunktion för datum ─────────────────────────────────────────────────
 function daysFromNow(n) {
@@ -29,13 +36,13 @@ const defaultMembers = [
 ];
 
 const defaultTasks = [
-  { id: 't1', title: 'Boka läkarbesök till Ella',  lane: 'ready',    mids: ['m2'], tags: ['Familj'],    prio: 'high' },
-  { id: 't2', title: 'Planera sommarlov',           lane: 'ready',    mids: ['m1'], tags: ['Aktivitet'], prio: 'med'  },
-  { id: 't3', title: 'Handla inför helgen',         lane: 'ready',    mids: ['m1'], tags: ['Hem'],       prio: 'low'  },
-  { id: 't4', title: 'Lämna in SO-läxa',            lane: 'ready',    mids: ['m3'], tags: ['Skola'],     prio: 'high' },
-  { id: 't5', title: 'Planera fotbollscup',         lane: 'progress', mids: ['m4'], tags: ['Aktivitet'], prio: 'med'  },
-  { id: 't6', title: 'Betala räkningar',            lane: 'done',     mids: ['m1'], tags: ['Ekonomi'],   prio: 'high' },
-  { id: 't7', title: 'Boka tandläkare',             lane: 'done',     mids: ['m2'], tags: ['Hälsa'],     prio: 'med'  },
+  { id: 't1', title: 'Boka läkarbesök till Ella',  lane: 'ready',    mids: ['m2'], tags: ['Hälsa'],  prio: 'high', estimate: '2h',      deadline: '', subtasks: [], epic: '' },
+  { id: 't2', title: 'Planera sommarlov',           lane: 'ready',    mids: ['m1'], tags: ['Fritid'], prio: 'med',  estimate: 'Halvdag', deadline: '', subtasks: [], epic: '' },
+  { id: 't3', title: 'Handla inför helgen',         lane: 'ready',    mids: ['m1'], tags: ['Hem'],    prio: 'low',  estimate: '2h',      deadline: '', subtasks: [], epic: '' },
+  { id: 't4', title: 'Lämna in SO-läxa',            lane: 'ready',    mids: ['m3'], tags: ['Skola'],  prio: 'high', estimate: '30 min',  deadline: '', subtasks: [], epic: '' },
+  { id: 't5', title: 'Planera fotbollscup',         lane: 'progress', mids: ['m4'], tags: ['Sport'],  prio: 'med',  estimate: 'Halvdag', deadline: '', subtasks: [], epic: '' },
+  { id: 't6', title: 'Betala räkningar',            lane: 'done',     mids: ['m1'], tags: ['Hem'],    prio: 'high', estimate: '30 min',  deadline: '', subtasks: [], epic: '' },
+  { id: 't7', title: 'Boka tandläkare',             lane: 'done',     mids: ['m2'], tags: ['Hälsa'],  prio: 'med',  estimate: '30 min',  deadline: '', subtasks: [], epic: '' },
 ];
 
 const defaultEvents = [
@@ -61,6 +68,7 @@ const defaultFiles = [
 // ─── Layout ───────────────────────────────────────────────────────────────────
 export default function KlaraLayout() {
   const [page, setPage] = useState('hem');
+  const [guestMode, setGuestMode] = useState(false);
 
   const [members,  setMembers]  = useLocalStorage('kl_members',  defaultMembers);
   const [tasks,    setTasks]    = useLocalStorage('kl_tasks',    defaultTasks);
@@ -76,7 +84,7 @@ export default function KlaraLayout() {
 
   function renderPage() {
     switch (page) {
-      case 'hem':          return <Hem {...commonProps} />;
+      case 'hem':          return <Hem {...commonProps} guestMode={guestMode} />;
       case 'kalender':     return <Kalender events={events} members={members} setEvents={setEvents} />;
       case 'uppgifter':    return <Uppgifter tasks={tasks} setTasks={setTasks} members={members} />;
       case 'planering':    return <Planering events={events} members={members} setEvents={setEvents} />;
@@ -86,7 +94,14 @@ export default function KlaraLayout() {
       case 'filer':        return <FilerLankar files={files} setFiles={setFiles} />;
       case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} />;
       case 'kravdatabas':  return <KravDatabas />;
-      default:             return <Hem {...commonProps} />;
+      case 'medicin':      return <Medicin members={members} guestMode={guestMode} />;
+      case 'bilhus':       return <BilHus />;
+      case 'ekonomi':      return <Ekonomi guestMode={guestMode} />;
+      case 'kids':         return <Kids members={members} />;
+      case 'listor':       return <Listor members={members} />;
+      case 'wellness':     return <Wellness members={members} />;
+      case 'assistent':    return <Assistent members={members} />;
+      default:             return <Hem {...commonProps} guestMode={guestMode} />;
     }
   }
 
@@ -98,6 +113,8 @@ export default function KlaraLayout() {
         members={members}
         unreadCount={unreadCount}
         focus={focus}
+        guestMode={guestMode}
+        onToggleGuest={() => setGuestMode(g => !g)}
       />
       <main style={{
         marginLeft: 240,

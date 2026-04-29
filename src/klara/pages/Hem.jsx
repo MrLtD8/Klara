@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { T } from '../theme';
+import { useLocalStorage } from '../../useLocalStorage';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function getWeekDays(offset = 0) {
@@ -44,8 +45,18 @@ function Avatar({ member, size = 28 }) {
   );
 }
 
+function daysUntilDate(isoDate) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(isoDate + 'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+
 // ─── Hem ──────────────────────────────────────────────────────────────────────
-export default function Hem({ members, tasks, events, onNavigate }) {
+export default function Hem({ members, tasks, events, onNavigate, guestMode = false }) {
+  const [carItems] = useLocalStorage('kl_car', []);
+  const [houseItems] = useLocalStorage('kl_house', []);
+  const [medicins] = useLocalStorage('kl_medicin', []);
+  const [budget] = useLocalStorage('kl_budget', []);
   const today = new Date();
   const todayIso = isoDate(today);
   const weekDays = getWeekDays(0);
@@ -339,6 +350,82 @@ export default function Hem({ members, tasks, events, onNavigate }) {
           <div style={{ marginTop: 12, fontSize: 13, color: T.purple, fontWeight: 500 }}>
             🌸 Ha en fin vecka!
           </div>
+        </div>
+      </div>
+
+      {/* Bottom widgets row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginTop: 20 }}>
+
+        {/* Påminnelser widget — car/house */}
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 18, boxShadow: T.shadow }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>🔔 Påminnelser</h2>
+            <button onClick={() => onNavigate('bilhus')} style={{ background: 'none', border: 'none', color: T.purple, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>Visa →</button>
+          </div>
+          {[...carItems.filter(c => !c.done && daysUntilDate(c.due) <= 30), ...houseItems.filter(h => {
+            if (!h.lastDone) return false;
+            const m = { monthly:1,yearly:12,every2y:24,every5y:60 }[h.interval] || 12;
+            const next = new Date(h.lastDone + 'T00:00:00');
+            next.setMonth(next.getMonth() + m);
+            return Math.round((next - new Date()) / 86400000) <= 30;
+          })].slice(0, 3).map((item, i) => {
+            const days = item.due ? daysUntilDate(item.due) : 0;
+            const color = days <= 14 ? T.red : '#F97316';
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 10px', background: T.bg, borderRadius: T.radiusSm, borderLeft: `3px solid ${color}` }}>
+                <span style={{ fontSize: 12, flex: 1, color: T.text }}>{item.title}</span>
+                <span style={{ fontSize: 11, color, fontWeight: 600 }}>{item.car || item.category}</span>
+              </div>
+            );
+          })}
+          {carItems.filter(c => !c.done && daysUntilDate(c.due) <= 30).length === 0 && (
+            <div style={{ fontSize: 13, color: T.textMuted }}>Inga akuta påminnelser</div>
+          )}
+        </div>
+
+        {/* Medicine low-stock */}
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 18, boxShadow: T.shadow }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>💊 Medicin</h2>
+            <button onClick={() => onNavigate('medicin')} style={{ background: 'none', border: 'none', color: T.purple, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>Visa →</button>
+          </div>
+          {guestMode ? (
+            <div style={{ fontSize: 13, color: T.textMuted }}>🔒 Dold i gästläge</div>
+          ) : medicins.filter(m => m.dose > 0 && Math.floor(m.stock / m.dose) <= (m.threshold || 7)).length === 0 ? (
+            <div style={{ fontSize: 13, color: T.textMuted }}>Alla mediciner har bra lager</div>
+          ) : (
+            medicins.filter(m => m.dose > 0 && Math.floor(m.stock / m.dose) <= (m.threshold || 7)).slice(0, 3).map(med => {
+              const days = Math.floor(med.stock / med.dose);
+              return (
+                <div key={med.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 10px', background: T.redLight, borderRadius: T.radiusSm, borderLeft: `3px solid ${T.red}` }}>
+                  <span style={{ fontSize: 12, flex: 1, color: T.text }}>{med.name}</span>
+                  <span style={{ fontSize: 11, color: T.red, fontWeight: 600 }}>{days} dagar</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Upcoming payments */}
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 18, boxShadow: T.shadow }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: T.text }}>💰 Kommande betalningar</h2>
+            <button onClick={() => onNavigate('ekonomi')} style={{ background: 'none', border: 'none', color: T.purple, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>Visa →</button>
+          </div>
+          {guestMode ? (
+            <div style={{ fontSize: 13, color: T.textMuted }}>🔒 Dold i gästläge</div>
+          ) : budget.filter(e => e.date > new Date().toISOString().split('T')[0]).slice(0, 3).length === 0 ? (
+            <div style={{ fontSize: 13, color: T.textMuted }}>Inga kommande betalningar</div>
+          ) : (
+            budget.filter(e => e.date > new Date().toISOString().split('T')[0]).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 3).map(item => (
+              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 10px', background: T.bg, borderRadius: T.radiusSm }}>
+                <span style={{ fontSize: 12, flex: 1, color: T.text }}>{item.title}</span>
+                <span style={{ fontSize: 11, color: item.type === 'income' ? T.green : T.red, fontWeight: 600 }}>
+                  {item.type === 'income' ? '+' : '-'}{item.amount.toLocaleString('sv-SE')} kr
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
+import { useAuth } from '../useAuth';
 import { T } from './theme';
 import Sidebar from './Sidebar';
 import Hem from './pages/Hem';
@@ -91,6 +92,7 @@ const DEFAULT_VISIBLE = {
 export default function KlaraLayout() {
   const [page, setPage] = useState('hem');
   const [guestMode, setGuestMode] = useState(false);
+  const { userName, userInitials, signOut, isLocalMode } = useAuth();
 
   const [members,      setMembers]      = useLocalStorage('kl_members',      defaultMembers);
   const [tasks,        setTasks]        = useLocalStorage('kl_tasks',        defaultTasks);
@@ -148,6 +150,9 @@ export default function KlaraLayout() {
         guestMode={guestMode}
         onToggleGuest={() => setGuestMode(g => !g)}
         visiblePages={visiblePages}
+        currentUser={{ name: userName, initials: userInitials }}
+        onSignOut={signOut}
+        isLocalMode={isLocalMode}
       />
       <main style={{
         marginLeft: 220,

@@ -1,65 +1,95 @@
-import { useState, useEffect, createContext, useContext } from "react";
-import { supabase } from "./supabase";
+import { useState, useEffect, createContext, useContext } from 'react';
+import { supabase } from './supabase';
+import { mockAuth } from './klara/mockAuth';
 
+// ─── Välj auth-backend: Supabase om konfigurerat, annars lokal mock ───────────
+const auth = supabase ? supabase.auth : mockAuth;
+export const isLocalMode = !supabase;
+
+// ─── Kontext ──────────────────────────────────────────────────────────────────
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const [session, setSession] = useState(undefined); // undefined = laddar
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!supabase) return; // Lokal läge utan Supabase
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) loadProfile(session.user.id);
+    // Hämta befintlig session
+    auth.getSession().then(({ data: { session } }) => {
+      setSession(session ?? null);
+      setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) loadProfile(session.user.id);
-      else setProfile(null);
+    // Lyssna på ändringar (login/logout)
+    const { data: { subscription } } = auth.onAuthStateChange((_event, session) => {
+      setSession(session ?? null);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  async function loadProfile(userId) {
-    if (!supabase) return;
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, display_name, family_id")
-      .eq("id", userId)
-      .single();
-    setProfile(data);
+  // ── Auth-funktioner ─────────────────────────────────────────────────────────
+  async function signIn(email, password) {
+    const { error } = await auth.signInWithPassword({ email, password });
+    return error ?? null;
   }
 
-  async function signInWithEmail(email, password) {
-    if (!supabase) return new Error("Supabase ej konfigurerat");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return error;
-  }
-
-  async function signUpWithEmail(email, password, displayName) {
-    if (!supabase) return new Error("Supabase ej konfigurerat");
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return error;
-    await supabase.from("profiles").insert({ id: data.user.id, display_name: displayName });
-    return null;
+  async function signUp(email, password, fullName, familyName) {
+    const { error } = await auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName, family_name: familyName },
+        // I produktion: emailRedirectTo: window.location.origin
+      },
+    });
+    return error ?? null;
   }
 
   async function signOut() {
-    if (!supabase) return;
-    await supabase.auth.signOut();
+    await auth.signOut();
   }
 
+  async function resetPassword(email) {
+    const { error } = await auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password',
+    });
+    return error ?? null;
+  }
+
+  // ── Härledd state ──────────────────────────────────────────────────────────
+  const user = session?.user ?? null;
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Användare';
+  const familyName = user?.user_metadata?.family_name || 'Vår familj';
+  const userInitials = userName
+    .split(' ')
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
   return (
-    <AuthContext.Provider value={{ session, profile, signInWithEmail, signUpWithEmail, signOut, isLocalMode: !supabase }}>
+    <AuthContext.Provider value={{
+      session,
+      user,
+      loading,
+      isLocalMode,
+      userName,
+      familyName,
+      userInitials,
+      signIn,
+      signUp,
+      signOut,
+      resetPassword,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth måste användas inuti AuthProvider');
+  return ctx;
 }

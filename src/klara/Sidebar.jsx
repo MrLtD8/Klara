@@ -28,6 +28,7 @@ const ALL_NAV_ITEMS = [
 export default function Sidebar({
   activePage, onNavigate, members, unreadCount,
   focus, showFocus, guestMode, onToggleGuest, visiblePages = {},
+  currentUser, onSignOut, isLocalMode,
 }) {
   const [installedApps] = useLocalStorage('kl_extra_apps', []);
 
@@ -156,46 +157,91 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* Bottom bar — Gästläge + Inställningar */}
-      <div style={{
-        padding: '10px', borderTop: '1px solid rgba(255,255,255,0.07)',
-        display: 'flex', gap: 6, flexShrink: 0,
-      }}>
-        {/* Guest toggle */}
-        <button
-          onClick={onToggleGuest}
-          title={guestMode ? 'Stäng av gästläge' : 'Aktivera gästläge'}
-          style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            padding: '9px 0',
-            background: guestMode ? T.sidebarActive : 'transparent',
-            border: `1px solid ${guestMode ? T.purple : 'rgba(255,255,255,0.12)'}`,
-            borderRadius: T.radiusSm, cursor: 'pointer',
-            color: guestMode ? T.sidebarActiveText : T.sidebarText,
-            fontSize: 12, fontWeight: guestMode ? 700 : 400, transition: 'all 0.15s',
-          }}
-        >
-          <User size={14} strokeWidth={guestMode ? 2.2 : 1.7} />
-          <span>{guestMode ? 'Gäst' : 'Gäst'}</span>
-        </button>
+      {/* Bottom — Användare + knappar */}
+      <div style={{ padding: '8px 10px 10px', borderTop: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
 
-        {/* Settings gear */}
-        <button
-          onClick={() => onNavigate('installningar')}
-          title="Inställningar"
-          style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            padding: '9px 0',
-            background: activePage === 'installningar' ? T.sidebarActive : 'transparent',
-            border: `1px solid ${activePage === 'installningar' ? T.purple : 'rgba(255,255,255,0.12)'}`,
-            borderRadius: T.radiusSm, cursor: 'pointer',
-            color: activePage === 'installningar' ? T.sidebarActiveText : T.sidebarText,
-            fontSize: 12, fontWeight: activePage === 'installningar' ? 700 : 400, transition: 'all 0.15s',
-          }}
-        >
-          <Settings size={14} strokeWidth={activePage === 'installningar' ? 2.2 : 1.7} />
-          <span>Inställningar</span>
-        </button>
+        {/* Inloggad användare */}
+        {currentUser && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 9,
+            padding: '8px 10px', marginBottom: 6,
+            borderRadius: T.radiusSm, background: 'rgba(255,255,255,0.04)',
+          }}>
+            {/* Avatar */}
+            <div style={{
+              width: 30, height: 30, borderRadius: '50%',
+              background: T.purple, color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700, flexShrink: 0,
+            }}>
+              {currentUser.initials}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: T.sidebarActiveText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {currentUser.name}
+              </div>
+              {isLocalMode && (
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>Lokalt läge</div>
+              )}
+            </div>
+            {/* Logga ut */}
+            <button
+              onClick={onSignOut}
+              title="Logga ut"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'rgba(255,255,255,0.3)', padding: 4, display: 'flex',
+                borderRadius: 6, transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
+            >
+              {/* Enkel utloggningsikon utan extra import */}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Guest + Inställningar */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={onToggleGuest}
+            title={guestMode ? 'Stäng av gästläge' : 'Aktivera gästläge'}
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              padding: '8px 0',
+              background: guestMode ? T.sidebarActive : 'transparent',
+              border: `1px solid ${guestMode ? T.purple : 'rgba(255,255,255,0.12)'}`,
+              borderRadius: T.radiusSm, cursor: 'pointer',
+              color: guestMode ? T.sidebarActiveText : T.sidebarText,
+              fontSize: 11, fontWeight: guestMode ? 700 : 400, transition: 'all 0.15s',
+            }}
+          >
+            <User size={13} strokeWidth={guestMode ? 2.2 : 1.7} />
+            <span>Gäst</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate('installningar')}
+            title="Inställningar"
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              padding: '8px 0',
+              background: activePage === 'installningar' ? T.sidebarActive : 'transparent',
+              border: `1px solid ${activePage === 'installningar' ? T.purple : 'rgba(255,255,255,0.12)'}`,
+              borderRadius: T.radiusSm, cursor: 'pointer',
+              color: activePage === 'installningar' ? T.sidebarActiveText : T.sidebarText,
+              fontSize: 11, fontWeight: activePage === 'installningar' ? 700 : 400, transition: 'all 0.15s',
+            }}
+          >
+            <Settings size={13} strokeWidth={activePage === 'installningar' ? 2.2 : 1.7} />
+            <span>Inställningar</span>
+          </button>
+        </div>
       </div>
     </div>
   );

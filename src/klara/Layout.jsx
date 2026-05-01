@@ -19,6 +19,7 @@ import Kids from './pages/Kids';
 import Listor from './pages/Listor';
 import Wellness from './pages/Wellness';
 import Assistent from './pages/Assistent';
+import Appar from './pages/Appar';
 
 // ─── Hjälpfunktion för datum ─────────────────────────────────────────────────
 function daysFromNow(n) {
@@ -124,7 +125,14 @@ export default function KlaraLayout() {
       case 'listor':       return <Listor members={members} />;
       case 'wellness':     return <Wellness members={members} />;
       case 'assistent':    return <Assistent members={members} />;
-      default:             return <Hem {...commonProps} guestMode={guestMode} />;
+      case 'appar':        return <Appar members={members} tasks={tasks} events={events} />;
+      default: {
+        // Installerade extra-appar: 'app:custom_123'
+        if (page.startsWith('app:')) {
+          return <Appar members={members} tasks={tasks} events={events} />;
+        }
+        return <Hem {...commonProps} guestMode={guestMode} />;
+      }
     }
   }
 

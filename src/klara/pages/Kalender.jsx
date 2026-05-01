@@ -384,6 +384,109 @@ function SkolaVy({ school, setSchool, members }) {
   );
 }
 
+// ─── Månadsvy ─────────────────────────────────────────────────────────────────
+function MonthView({ calEvents, todayIso, onDayClick, removeEvent }) {
+  const [monthOffset, setMonthOffset] = useState(0);
+
+  const base = new Date();
+  base.setDate(1);
+  base.setMonth(base.getMonth() + monthOffset);
+  const year  = base.getFullYear();
+  const month = base.getMonth();
+
+  // Monday-aligned 6×7 grid
+  const firstDay = new Date(year, month, 1);
+  const dow      = (firstDay.getDay() + 6) % 7;
+  const startDate = new Date(year, month, 1 - dow);
+  const days = Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
+    return d;
+  });
+
+  const label = `${MONTHS_SV[month]} ${year}`;
+
+  return (
+    <div>
+      {/* Month navigation */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: '10px 18px', boxShadow: T.shadow, width: 'fit-content' }}>
+        <button onClick={() => setMonthOffset(m => m - 1)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: T.purple, padding: '2px 8px' }}>‹</button>
+        <span style={{ fontWeight: 700, color: T.text, minWidth: 180, textAlign: 'center', fontSize: 16, textTransform: 'capitalize' }}>{label}</span>
+        <button onClick={() => setMonthOffset(m => m + 1)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: T.purple, padding: '2px 8px' }}>›</button>
+        {monthOffset !== 0 && (
+          <button onClick={() => setMonthOffset(0)} style={{ background: T.purpleLight, color: T.purple, border: 'none', borderRadius: T.radiusSm, fontSize: 12, cursor: 'pointer', padding: '4px 10px', fontWeight: 600 }}>Idag</button>
+        )}
+      </div>
+
+      {/* Day-of-week header */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
+        {DAY_SHORT.map(d => (
+          <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 0' }}>{d}</div>
+        ))}
+      </div>
+
+      {/* Day grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+        {days.map((day, i) => {
+          const iso = isoDate(day);
+          const isCurrentMonth = day.getMonth() === month;
+          const isToday = iso === todayIso;
+          const dayEvs = calEvents.filter(ev => eventMatchesDay(ev, iso));
+
+          return (
+            <div
+              key={i}
+              onClick={() => onDayClick(iso)}
+              style={{
+                background: isToday ? T.purpleLight : T.card,
+                border: `1.5px solid ${isToday ? T.purple : T.border}`,
+                borderRadius: T.radiusSm,
+                padding: '6px 8px',
+                minHeight: 88,
+                cursor: 'pointer',
+                opacity: isCurrentMonth ? 1 : 0.3,
+                transition: 'border-color 0.15s',
+                boxShadow: isToday ? `0 0 0 2px ${T.purple}22` : 'none',
+              }}
+              onMouseEnter={e => { if (!isToday) e.currentTarget.style.borderColor = T.purple + '66'; }}
+              onMouseLeave={e => { if (!isToday) e.currentTarget.style.borderColor = T.border; }}
+            >
+              <div style={{
+                fontSize: 13, fontWeight: isToday ? 800 : 500,
+                color: isToday ? T.purple : (isCurrentMonth ? T.text : T.textMuted),
+                marginBottom: 4,
+                width: 24, height: 24, borderRadius: '50%',
+                background: isToday ? T.purple : 'transparent',
+                color: isToday ? '#fff' : (isCurrentMonth ? T.text : T.textMuted),
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {day.getDate()}
+              </div>
+              {dayEvs.slice(0, 3).map(ev => {
+                const et = EVENT_TYPES[ev.type] || EVENT_TYPES.note;
+                return (
+                  <div key={ev.id + iso} style={{
+                    background: et.bg, border: `1px solid ${et.border}`,
+                    borderRadius: 3, padding: '1px 5px',
+                    fontSize: 10, fontWeight: 600, color: '#333',
+                    marginBottom: 2, lineHeight: 1.4,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {et.icon} {ev.title}
+                  </div>
+                );
+              })}
+              {dayEvs.length > 3 && (
+                <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 600 }}>+{dayEvs.length - 3} till</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Kalender (huvud) ─────────────────────────────────────────────────────────
 export default function Kalender({ members, school, setSchool, initialView = 'kalender' }) {
   const [calEvents, setCalEvents] = useLocalStorage('kl_cal_events', []);
@@ -395,6 +498,7 @@ export default function Kalender({ members, school, setSchool, initialView = 'ka
   const schoolData   = school    ?? skolaItems;
   const setSchoolData= setSchool ?? setSkolaItems;
   const [weekOffset, setWeekOffset] = useState(0);
+  const [calView, setCalView] = useState('week'); // 'week' | 'month'
   const [showModal, setShowModal] = useState(false);
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverDay, setDragOverDay] = useState(null);
@@ -486,18 +590,29 @@ export default function Kalender({ members, school, setSchool, initialView = 'ka
             Vecka {weekNum} — {monthName}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {activeView === 'kalender' && (
-            <button
-              onClick={() => openModal(null)}
-              style={{
-                background: T.purple, color: '#fff', border: 'none',
-                borderRadius: T.radiusSm, padding: '9px 18px',
-                fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              + Händelse
-            </button>
+            <>
+              {/* Week / Month toggle */}
+              <div style={{ display: 'flex', background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, overflow: 'hidden' }}>
+                {['week','month'].map(v => (
+                  <button key={v} onClick={() => setCalView(v)} style={{
+                    padding: '7px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: calView === v ? 700 : 400,
+                    background: calView === v ? T.purple : 'transparent',
+                    color: calView === v ? '#fff' : T.textMuted,
+                    transition: 'all 0.15s',
+                  }}>
+                    {v === 'week' ? 'Vecka' : 'Månad'}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => openModal(null)}
+                style={{ background: T.purple, color: '#fff', border: 'none', borderRadius: T.radiusSm, padding: '9px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+              >
+                + Händelse
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -538,6 +653,18 @@ export default function Kalender({ members, school, setSchool, initialView = 'ka
       {/* Kalender-vyn (resten renderas bara när activeView === 'kalender') */}
       {activeView === 'kalender' && (<>
 
+      {/* Månadsvy */}
+      {calView === 'month' && (
+        <MonthView
+          calEvents={calEvents}
+          todayIso={todayIso}
+          onDayClick={openModal}
+          removeEvent={removeEvent}
+        />
+      )}
+
+      {/* Veckovy */}
+      {calView === 'week' && (<>
 
       {/* Navigation */}
       <div style={{
@@ -675,6 +802,8 @@ export default function Kalender({ members, school, setSchool, initialView = 'ka
           );
         })}
       </div>
+
+      </>)} {/* end calView === 'week' */}
 
       {/* Add Event Modal */}
       {showModal && (

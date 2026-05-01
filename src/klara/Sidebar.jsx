@@ -3,8 +3,9 @@ import { T } from './theme';
 import {
   Home, Calendar, CheckSquare, FolderOpen,
   Wrench, Wallet, Star, List, Heart, Bot, BarChart2,
-  Users, MessageCircle, Pill, Settings, User,
+  Users, MessageCircle, Pill, Settings, User, Package, Plus,
 } from 'lucide-react';
+import { useLocalStorage } from '../useLocalStorage';
 
 const ALL_NAV_ITEMS = [
   { id: 'hem',         label: 'Hem',            Icon: Home,          alwaysOn: true },
@@ -28,6 +29,8 @@ export default function Sidebar({
   activePage, onNavigate, members, unreadCount,
   focus, showFocus, guestMode, onToggleGuest, visiblePages = {},
 }) {
+  const [installedApps] = useLocalStorage('kl_extra_apps', []);
+
   const NAV_ITEMS = ALL_NAV_ITEMS.filter(item =>
     item.alwaysOn || visiblePages[item.id]
   );
@@ -86,6 +89,58 @@ export default function Sidebar({
           );
         })}
       </nav>
+
+      {/* ── APPAR ─── */}
+      <div style={{ padding: '4px 10px 0', flexShrink: 0 }}>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8, marginBottom: 2 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.25)', letterSpacing: 1.2, textTransform: 'uppercase', padding: '4px 4px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Appar</span>
+          </div>
+          {/* Installed extra apps */}
+          {installedApps.map(app => {
+            const isActive = activePage === `app:${app.id}`;
+            return (
+              <button
+                key={app.id}
+                onClick={() => onNavigate(`app:${app.id}`)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  width: '100%', padding: '7px 11px', marginBottom: 2,
+                  background: isActive ? T.sidebarActive : 'transparent',
+                  border: 'none', borderRadius: T.radiusSm, cursor: 'pointer',
+                  color: isActive ? T.sidebarActiveText : T.sidebarText,
+                  fontSize: 13, fontWeight: isActive ? 600 : 400,
+                  textAlign: 'left', transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = T.sidebarHover; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <span style={{ fontSize: 14, flexShrink: 0, opacity: isActive ? 1 : 0.8 }}>{app.icon}</span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.name}</span>
+              </button>
+            );
+          })}
+          {/* Hantera appar */}
+          <button
+            onClick={() => onNavigate('appar')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              width: '100%', padding: '7px 11px', marginBottom: 2,
+              background: activePage === 'appar' ? T.sidebarActive : 'transparent',
+              border: 'none', borderRadius: T.radiusSm, cursor: 'pointer',
+              color: activePage === 'appar' ? T.sidebarActiveText : T.sidebarText,
+              fontSize: 13, fontWeight: activePage === 'appar' ? 600 : 400,
+              textAlign: 'left', transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => { if (activePage !== 'appar') e.currentTarget.style.background = T.sidebarHover; }}
+            onMouseLeave={e => { if (activePage !== 'appar') e.currentTarget.style.background = 'transparent'; }}
+          >
+            <Package size={14} strokeWidth={activePage === 'appar' ? 2.2 : 1.7} style={{ flexShrink: 0, opacity: activePage === 'appar' ? 1 : 0.65 }} />
+            <span style={{ flex: 1 }}>Hantera appar</span>
+            <Plus size={12} style={{ opacity: 0.5 }} />
+          </button>
+        </div>
+      </div>
 
       {/* Dagens fokus — valfri */}
       {showFocus && focus && (

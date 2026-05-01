@@ -128,6 +128,36 @@ export const mockAuth = {
     };
   },
 
+  // OAuth (Google etc.) — simuleras lokalt med en fake Google-användare
+  signInWithOAuth: async ({ provider }) => {
+    await delay(600);
+    if (provider !== 'google') {
+      return { data: null, error: { message: `Provider "${provider}" stöds inte i lokalt läge.` } };
+    }
+    // Skapa/återanvänd en mock-Google-användare
+    const mockEmail = 'mock.google@gmail.com';
+    const users = getUsers();
+    let user = users.find(u => u.email === mockEmail);
+    if (!user) {
+      user = {
+        id: 'mock_google_' + Date.now(),
+        email: mockEmail,
+        password: null,
+        name: 'Google Användare',
+        familyName: 'Vår familj',
+        provider: 'google',
+        createdAt: new Date().toISOString(),
+      };
+      users.push(user);
+      saveUsers(users);
+    }
+    const session = makeSession(user);
+    saveSession(session);
+    notify('SIGNED_IN', session);
+    // I riktig Supabase öppnas ett popup/redirect — här "returnerar" vi direkt
+    return { data: { provider, url: null }, error: null };
+  },
+
   // Uppdatera lösenord (används vid glömt lösenord — lokal: hittar user och ändrar)
   updateUser: async ({ password }) => {
     await delay(400);

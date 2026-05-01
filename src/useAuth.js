@@ -58,6 +58,20 @@ export function AuthProvider({ children }) {
     return error ?? null;
   }
 
+  async function signInWithGoogle() {
+    const { error } = await auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: {
+          access_type: 'offline',  // ger refresh_token
+          prompt: 'consent',
+        },
+      },
+    });
+    return error ?? null;
+  }
+
   // ── Härledd state ──────────────────────────────────────────────────────────
   const user = session?.user ?? null;
   const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Användare';
@@ -82,6 +96,7 @@ export function AuthProvider({ children }) {
       signUp,
       signOut,
       resetPassword,
+      signInWithGoogle,
     }}>
       {children}
     </AuthContext.Provider>

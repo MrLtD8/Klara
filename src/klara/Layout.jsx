@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
-import { useAuth } from '../useAuth';
 import { T } from './theme';
 import Sidebar from './Sidebar';
 import Hem from './pages/Hem';
 import Kalender from './pages/Kalender';
 import Uppgifter from './pages/Uppgifter';
-import Planering from './pages/Planering';
-import Skola from './pages/Skola';
 import Familj from './pages/Familj';
 import Meddelanden from './pages/Meddelanden';
 import FilerLankar from './pages/FilerLankar';
@@ -72,37 +69,36 @@ const DEFAULT_VISIBLE = {
   hem:           true,   // alltid på
   kalender:      true,
   uppgifter:     true,
-  skola:         true,
-  filer:         true,
-  bilhus:        true,
-  ekonomi:       true,
-  kids:          true,
-  listor:        true,
-  wellness:      true,
-  assistent:     true,
   installningar: true,   // alltid på
-  kravdatabas:   true,
-  // dolda som standard
+  // dolda som standard — aktiveras i Hantera appar
+  skola:         false,
+  filer:         false,
+  bilhus:        false,
+  ekonomi:       false,
+  kids:          false,
+  listor:        false,
+  wellness:      false,
+  assistent:     false,
+  kravdatabas:   false,
   meddelanden:   false,
-  familj:        false,  // hanteras i Inställningar
-  medicin:       false,  // hanteras i Inställningar
+  familj:        false,
+  medicin:       false,
 };
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 export default function KlaraLayout() {
   const [page, setPage] = useState('hem');
   const [guestMode, setGuestMode] = useState(false);
-  const { userName, userInitials, signOut, isLocalMode } = useAuth();
 
   const [members,      setMembers]      = useLocalStorage('kl_members',      defaultMembers);
   const [tasks,        setTasks]        = useLocalStorage('kl_tasks',        defaultTasks);
   const [events,       setEvents]       = useLocalStorage('kl_events',       defaultEvents);
-  const [school,       setSchool]       = useLocalStorage('kl_school',       []);
   const [messages,     setMessages]     = useLocalStorage('kl_messages',     defaultMessages);
   const [files,        setFiles]        = useLocalStorage('kl_files',        defaultFiles);
   const [focus,        setFocus]        = useLocalStorage('kl_focus',        'En sak i taget gör stor skillnad.');
-  const [visiblePages, setVisiblePages] = useLocalStorage('kl_visible_pages', DEFAULT_VISIBLE);
-  const [showFocus,    setShowFocus]    = useLocalStorage('kl_show_focus',    false);
+  const [visiblePages,     setVisiblePages]     = useLocalStorage('kl_visible_pages', DEFAULT_VISIBLE);
+  const [showFocus,        setShowFocus]        = useLocalStorage('kl_show_focus',    false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage('kl_sidebar_collapsed', false);
 
   const unreadCount = messages.filter(m => !m.read).length;
 
@@ -111,14 +107,12 @@ export default function KlaraLayout() {
   function renderPage() {
     switch (page) {
       case 'hem':          return <Hem {...commonProps} setTasks={setTasks} guestMode={guestMode} />;
-      case 'kalender':     return <Kalender events={events} members={members} setEvents={setEvents} school={school} setSchool={setSchool} initialView="kalender" />;
+      case 'kalender':     return <Kalender members={members} />;
       case 'uppgifter':    return <Uppgifter tasks={tasks} setTasks={setTasks} members={members} />;
-      case 'planering':    return <Kalender events={events} members={members} setEvents={setEvents} school={school} setSchool={setSchool} initialView="planering" />;
-      case 'skola':        return <Kalender events={events} members={members} setEvents={setEvents} school={school} setSchool={setSchool} initialView="skola" />;
       case 'familj':       return <Familj members={members} setMembers={setMembers} tasks={tasks} events={events} />;
       case 'meddelanden':  return <Meddelanden messages={messages} setMessages={setMessages} members={members} />;
       case 'filer':        return <FilerLankar files={files} setFiles={setFiles} />;
-      case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} visiblePages={visiblePages} setVisiblePages={setVisiblePages} onNavigate={setPage} showFocus={showFocus} setShowFocus={setShowFocus} />;
+      case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} onNavigate={setPage} showFocus={showFocus} setShowFocus={setShowFocus} />;
       case 'kravdatabas':  return <KravDatabas />;
       case 'medicin':      return <Medicin members={members} guestMode={guestMode} />;
       case 'bilhus':       return <BilHus />;
@@ -127,11 +121,11 @@ export default function KlaraLayout() {
       case 'listor':       return <Listor members={members} />;
       case 'wellness':     return <Wellness members={members} />;
       case 'assistent':    return <Assistent members={members} />;
-      case 'appar':        return <Appar members={members} tasks={tasks} events={events} />;
+      case 'appar':        return <Appar members={members} tasks={tasks} events={events} visiblePages={visiblePages} setVisiblePages={setVisiblePages} />;
       default: {
         // Installerade extra-appar: 'app:custom_123'
         if (page.startsWith('app:')) {
-          return <Appar members={members} tasks={tasks} events={events} />;
+          return <Appar members={members} tasks={tasks} events={events} visiblePages={visiblePages} setVisiblePages={setVisiblePages} />;
         }
         return <Hem {...commonProps} guestMode={guestMode} />;
       }
@@ -139,7 +133,7 @@ export default function KlaraLayout() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: T.bg, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: T.bg, fontFamily: T.fontBody }}>
       <Sidebar
         activePage={page}
         onNavigate={setPage}
@@ -150,12 +144,12 @@ export default function KlaraLayout() {
         guestMode={guestMode}
         onToggleGuest={() => setGuestMode(g => !g)}
         visiblePages={visiblePages}
-        currentUser={{ name: userName, initials: userInitials }}
-        onSignOut={signOut}
-        isLocalMode={isLocalMode}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(c => !c)}
       />
       <main style={{
-        marginLeft: 220,
+        marginLeft: sidebarCollapsed ? 52 : 220,
+        transition: 'margin-left 0.2s ease',
         flex: 1,
         minHeight: '100vh',
         background: T.bg,

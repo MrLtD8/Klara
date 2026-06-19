@@ -5,7 +5,26 @@ import { COMMUNITY_APPS, APP_CATEGORIES, APP_MANIFEST_SCHEMA, PERMISSIONS, REGIS
 import {
   Package, Plus, Search, ExternalLink, Shield, CheckCircle,
   Code2, Globe, Trash2, RefreshCw, AlertCircle, Copy, ChevronDown, ChevronUp,
+  Calendar, CheckSquare, GraduationCap, FolderOpen, Wrench, Wallet,
+  Star, List, Heart, Bot, BarChart2, Users, MessageCircle, Pill,
 } from 'lucide-react';
+
+// ─── Inbyggda moduler ─────────────────────────────────────────────────────────
+const BUILT_IN_MODULES = [
+  { id: 'kalender',    label: 'Kalender · Planering · Skola', Icon: Calendar,     desc: 'Veckokalender, planering och skoluppgifter' },
+  { id: 'uppgifter',   label: 'Uppgifter',                    Icon: CheckSquare,  desc: 'Kanban-tavla med uppgifter och epics' },
+  { id: 'filer',       label: 'Filer & Länkar',               Icon: FolderOpen,   desc: 'Dokument och viktiga länkar' },
+  { id: 'bilhus',      label: 'Bil & Hus',                    Icon: Wrench,       desc: 'Service, underhåll och påminnelser' },
+  { id: 'ekonomi',     label: 'Ekonomi',                      Icon: Wallet,       desc: 'Budget och utgiftsöversikt' },
+  { id: 'kids',        label: 'Kids & Sysslor',               Icon: Star,         desc: 'Sysslor med poäng och aktivitetshjul' },
+  { id: 'listor',      label: 'Listor',                       Icon: List,         desc: 'Bucketlist och sommarlovslista' },
+  { id: 'wellness',    label: 'Wellness',                     Icon: Heart,        desc: 'Hälsolog och humörspårning' },
+  { id: 'assistent',   label: 'Assistent',                    Icon: Bot,          desc: 'AI-dagsrapport och sammanfattning' },
+  { id: 'kravdatabas', label: 'Kravdatabas',                  Icon: BarChart2,    desc: 'Alla krav och status' },
+  { id: 'familj',      label: 'Familj',                       Icon: Users,        desc: 'Familjeöversikt som separat sida' },
+  { id: 'medicin',     label: 'Medicin',                      Icon: Pill,         desc: 'Medicinhantering' },
+  { id: 'meddelanden', label: 'Meddelanden',                  Icon: MessageCircle,desc: 'Intern familjechatt' },
+];
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const inp = {
@@ -157,9 +176,9 @@ function InstalledCard({ app, onUninstall, onOpen, members, tasks, events }) {
 }
 
 // ─── Appar (huvud) ────────────────────────────────────────────────────────────
-export default function Appar({ members, tasks, events }) {
+export default function Appar({ members, tasks, events, visiblePages = {}, setVisiblePages }) {
   const [installedApps, setInstalledApps] = useLocalStorage('kl_extra_apps', []);
-  const [tab, setTab] = useState('installerade');
+  const [tab, setTab] = useState('moduler');
   const [catFilter, setCatFilter] = useState('alla');
   const [search, setSearch] = useState('');
   const [showAddUrl, setShowAddUrl] = useState(false);
@@ -239,16 +258,79 @@ export default function Appar({ members, tasks, events }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 28, background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 6, width: 'fit-content', boxShadow: T.shadow }}>
+        <button style={TAB_STYLE(tab === 'moduler')} onClick={() => setTab('moduler')}>
+          Moduler
+        </button>
         <button style={TAB_STYLE(tab === 'installerade')} onClick={() => setTab('installerade')}>
-          Installerade {installedApps.length > 0 && `(${installedApps.length})`}
+          Egna appar {installedApps.length > 0 && `(${installedApps.length})`}
         </button>
         <button style={TAB_STYLE(tab === 'utforska')} onClick={() => setTab('utforska')}>
-          Utforska appar
+          Utforska
         </button>
         <button style={TAB_STYLE(tab === 'bygg')} onClick={() => setTab('bygg')}>
           Bygg en app
         </button>
       </div>
+
+      {/* ── TAB: Moduler ──────────────────────────────────────────────────── */}
+      {tab === 'moduler' && (
+        <div>
+          <p style={{ margin: '0 0 20px', fontSize: 13, color: T.textMuted, lineHeight: 1.6 }}>
+            Hem, Kalender och Uppgifter visas alltid. Slå på övriga moduler för att visa dem i sidomenyn.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {BUILT_IN_MODULES.map(mod => {
+              const { Icon } = mod;
+              const isOn = !!visiblePages[mod.id];
+              return (
+                <div key={mod.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '12px 16px', borderRadius: T.radius,
+                  background: isOn ? T.purpleLight : T.card,
+                  border: `1px solid ${isOn ? T.purple + '44' : T.border}`,
+                  boxShadow: T.shadow,
+                  transition: 'all 0.15s',
+                }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 12,
+                    background: isOn ? T.purple : T.border,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0, transition: 'background 0.15s',
+                  }}>
+                    <Icon size={18} color={isOn ? '#fff' : T.textMuted} strokeWidth={2} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{mod.label}</div>
+                    <div style={{ fontSize: 12, color: T.textMuted }}>{mod.desc}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 12, color: isOn ? T.purple : T.textMuted, fontWeight: 600 }}>
+                      {isOn ? 'Visas i menyn' : 'Dold'}
+                    </span>
+                    <button
+                      onClick={() => setVisiblePages && setVisiblePages(prev => ({ ...prev, [mod.id]: !prev[mod.id] }))}
+                      style={{
+                        width: 44, height: 24, borderRadius: 12,
+                        background: isOn ? T.purple : T.border,
+                        border: 'none', cursor: 'pointer', position: 'relative',
+                        transition: 'background 0.2s', flexShrink: 0,
+                      }}
+                    >
+                      <div style={{
+                        position: 'absolute', top: 3,
+                        left: isOn ? 23 : 3,
+                        width: 18, height: 18, borderRadius: '50%',
+                        background: '#fff', transition: 'left 0.2s',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      }} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── TAB: Installerade ─────────────────────────────────────────────── */}
       {tab === 'installerade' && (

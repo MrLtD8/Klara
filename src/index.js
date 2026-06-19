@@ -14,8 +14,6 @@
 // ─────────────────────────────────────────────────────────────
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { AuthProvider } from './useAuth';
-import { AuthGate } from './AuthGate';
 
 const params = window.location.search;
 const isTestMode   = params.includes('test');
@@ -27,26 +25,16 @@ const isMobile = !forceDesktop && (forceMobile || window.innerWidth < 640);
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
-function withAuth(AppComponent) {
-  return (
-    <AuthProvider>
-      <AuthGate>
-        <AppComponent />
-      </AuthGate>
-    </AuthProvider>
-  );
-}
-
 if (isTestMode) {
   import('./familjeplan-testplatform').then(({ default: TestApp }) => {
-    root.render(withAuth(TestApp));
+    root.render(<TestApp />);
   });
 } else if (isMobile) {
   import('./familjeapp-mobile').then(({ default: MobileApp }) => {
-    root.render(withAuth(MobileApp));
+    root.render(<MobileApp />);
   });
 } else {
   import('./App').then(({ default: App }) => {
-    root.render(withAuth(App));
+    root.render(<App />);
   });
 }

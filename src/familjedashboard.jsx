@@ -24,7 +24,11 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import useGoogleCalendar from './useGoogleCalendar';
+import useIcsCalendars from './useIcsCalendars';
+import { DEFAULT_GCAL, activeCalendars, normalizeGcal, GCAL_COLORS, newCalendarId } from './gcal';
+// Delat datalager: läser/skriver Klaras kanoniska kl_*-nycklar så båda
+// designerna ser samma familj, uppgifter och kalender. Se src/sharedData.js.
+import { useSharedFamily, useSharedTasks, useSharedEvents } from './sharedData';
 
 // Delade konstanter — definierade i ./constants.js
 import {
@@ -172,7 +176,7 @@ function CalendarView({T,familyMeals,schoolMenu}){
   const today=new Date(); today.setHours(0,0,0,0);
   const [weekStart,setWeekStart]=useState(getWeekStart(today));
   const [calMeals,setCalMeals]=useLocalStorage("fp_calmeals",{});
-  const [calEvents,setCalEvents]=useLocalStorage("fp_calevents",[]);
+  const [calEvents,setCalEvents]=useSharedEvents();
   const [addEvDate,setAddEvDate]=useState(null);
   const [editMealDate,setEditMealDate]=useState(null);
   const [editMealForm,setEditMealForm]=useState({dinner:"",lunch:""});
@@ -208,8 +212,10 @@ function CalendarView({T,familyMeals,schoolMenu}){
     const d=new Date(dk);
     const recurring=calEvents.filter(e=>{
       if(e.date===dk)return false;
-      if(e.recur==="weekly"){const s=new Date(e.date);return s.getDay()===d.getDay();}
-      if(e.recur==="yearly"){const s=new Date(e.date);return s.getMonth()===d.getMonth()&&s.getDate()===d.getDate();}
+      const s=new Date(e.date);
+      if(d<s)return false; // visa aldrig en repetition före startdatumet
+      if(e.recur==="weekly"){return s.getDay()===d.getDay();}
+      if(e.recur==="yearly"){return s.getMonth()===d.getMonth()&&s.getDate()===d.getDate();}
       return false;
     });
     return [...direct,...recurring];
@@ -1354,8 +1360,16 @@ function parseSchoolPaste(raw){
 }
 
 /* ═══ SETTINGS ══════════════════════════════════════════════════ */
-function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,schoolMenu,setSchoolMenu,gcal,gcalClientId,setGcalClientId,flowMeds,setFlowMeds,choresList,setChoresList,setChoresDone,onClose}){
+function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,schoolMenu,setSchoolMenu,gcal,gcalSettings,setGcalSettings,flowMeds,setFlowMeds,choresList,setChoresList,setChoresDone,onClose}){
   const set=(k,v)=>setCfg(s=>({...s,[k]:v}));
+  const [design,setDesign]=useLocalStorage("app_design","klara");
+  const chooseDesign=d=>{ if(d===design)return; setDesign(d); setTimeout(()=>window.location.reload(),60); };
+  // Flera iCal-kalendrar (delas med Klara via kl_gcal). Se src/gcal.js.
+  const gcalNorm=normalizeGcal(gcalSettings);
+  const updCal=(id,patch)=>setGcalSettings(s=>{const n=normalizeGcal(s);return {...n,calendars:n.calendars.map(c=>c.id===id?{...c,...patch}:c)};});
+  const addCal=()=>setGcalSettings(s=>{const n=normalizeGcal(s);const color=GCAL_COLORS[n.calendars.length%GCAL_COLORS.length];return {...n,enabled:true,calendars:[...n.calendars,{id:newCalendarId(),name:"",icsUrl:"",color,enabled:true}]};});
+  const delCal=id=>setGcalSettings(s=>{const n=normalizeGcal(s);return {...n,calendars:n.calendars.filter(c=>c.id!==id)};});
+  const cycleColor=id=>setGcalSettings(s=>{const n=normalizeGcal(s);return {...n,calendars:n.calendars.map(c=>{if(c.id!==id)return c;const i=GCAL_COLORS.indexOf(c.color);return {...c,color:GCAL_COLORS[(i+1)%GCAL_COLORS.length]};})};});
   const [fname,setFname]=useState(family.name);
   const [fmembers,setFmembers]=useState(family.members.map(m=>({...m})));
   const [newMeal,setNewMeal]=useState("");
@@ -1432,36 +1446,44 @@ function Settings({T,cfg,setCfg,family,setFamily,familyMeals,setFamilyMeals,scho
           <Row label="Mörkt tema"><Toggle value={cfg.dark} onChange={v=>set("dark",v)} T={T} small/></Row>
           <Row label="Familjebild i bakgrunden"><Toggle value={cfg.showPhoto} onChange={v=>set("showPhoto",v)} T={T} small/></Row>
           {cfg.showPhoto&&<Row label="Bakgrundens dimning"><div style={{display:"flex",alignItems:"center",gap:6}}><input type="range" min="0" max="80" step="5" value={cfg.photoDim} onChange={e=>set("photoDim",Number(e.target.value))} style={{width:80}}/><span style={{fontSize:10,color:T.textMid,minWidth:24}}>{cfg.photoDim}%</span></div></Row>}
+          <p style={{fontSize:9,color:T.textDim,letterSpacing:1.5,textTransform:"uppercase",margin:"14px 0 6px"}}>Design</p>
+          <p style={{fontSize:10,color:T.textDim,marginBottom:8,lineHeight:1.5}}>Byt utseende på appen. Båda designerna delar samma data.</p>
+          <div style={{display:"flex",gap:8,marginBottom:4}}>
+            {[["familjen","Familjen","Grå/varm dashboard"],["klara","Klara","Lila, sidomeny"]].map(([id,name,desc])=>{
+              const active=design===id;
+              return <button key={id} onClick={()=>chooseDesign(id)} style={{flex:1,textAlign:"left",padding:"9px 11px",borderRadius:9,border:`1.5px solid ${active?T.amber:T.border}`,background:active?T.amberBg:T.surface,cursor:"pointer",fontFamily:"inherit"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                  <span style={{fontSize:12,fontWeight:700,color:T.text}}>{name}</span>
+                  {active&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:T.amber,borderRadius:999,padding:"1px 6px"}}>AKTIV</span>}
+                </div>
+                <div style={{fontSize:9,color:T.textDim,lineHeight:1.3}}>{desc}</div>
+              </button>;
+            })}
+          </div>
           <p style={{fontSize:9,color:T.textDim,letterSpacing:1.5,textTransform:"uppercase",margin:"14px 0 2px"}}>Integritet</p>
           <Row label="Gästläge"><Toggle value={cfg.guestMode} onChange={v=>set("guestMode",v)} T={T} small/></Row>
-          <p style={{fontSize:9,color:T.textDim,letterSpacing:1.5,textTransform:"uppercase",margin:"14px 0 6px"}}>Google Kalender</p>
-          {gcal?.connected ? (
-            <div style={{padding:"10px 12px",borderRadius:9,background:T.greenBg,border:`1px solid ${T.green}33`,marginBottom:8}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div>
-                  <p style={{fontSize:12,color:T.green,fontWeight:700}}>✓ Ansluten</p>
-                  <p style={{fontSize:10,color:T.textDim,marginTop:2}}>Events hämtas automatiskt</p>
-                </div>
-                <button onClick={gcal.disconnect} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${T.red}`,background:T.redBg,color:T.red,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Koppla ifrån</button>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",margin:"14px 0 6px"}}>
+            <p style={{fontSize:9,color:T.textDim,letterSpacing:1.5,textTransform:"uppercase",margin:0}}>Google Kalender (iCal)</p>
+            <Toggle value={!!gcalNorm.enabled} onChange={v=>setGcalSettings(s=>({...normalizeGcal(s),enabled:v}))} T={T} small/>
+          </div>
+          <p style={{fontSize:10,color:T.textDim,marginBottom:8,lineHeight:1.5}}>
+            Lägg till en eller flera <span style={{fontWeight:600}}>hemliga iCal-länkar</span> (Google Kalender → Inställningar → välj kalender → "Hemlig adress i iCal-format"). Ingen OAuth, fungerar på iPad. Klicka på färgpricken för att byta färg.
+          </p>
+          {gcalNorm.calendars.map((c,i)=>(
+            <div key={c.id} style={{padding:"8px 10px",borderRadius:9,background:T.surface,border:`1px solid ${T.border}`,marginBottom:6}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                <button onClick={()=>cycleColor(c.id)} title="Byt färg" style={{width:18,height:18,borderRadius:5,background:c.color,border:"none",cursor:"pointer",flexShrink:0}}/>
+                <input value={c.name} onChange={e=>updCal(c.id,{name:e.target.value})} placeholder={`Kalender ${i+1}`}
+                  style={{flex:1,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
+                <Toggle value={c.enabled} onChange={v=>updCal(c.id,{enabled:v})} T={T} small/>
+                <button onClick={()=>delCal(c.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.textDim,fontSize:14,lineHeight:1,flexShrink:0}}>✕</button>
               </div>
+              <input value={c.icsUrl} onChange={e=>updCal(c.id,{icsUrl:e.target.value})}
+                placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+                style={{width:"100%",padding:"6px 9px",borderRadius:7,border:`1.5px solid ${T.border}`,background:T.bg,color:T.text,fontSize:10,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
             </div>
-          ) : (
-            <div style={{padding:"10px 12px",borderRadius:9,background:T.surface,border:`1px solid ${T.border}`,marginBottom:8}}>
-              <p style={{fontSize:11,color:T.textMid,marginBottom:8,lineHeight:1.6}}>
-                Kräver ett OAuth 2.0 Client ID från <span style={{color:T.blue,fontWeight:600}}>console.cloud.google.com</span>
-              </p>
-              <input value={gcalClientId||""} onChange={e=>setGcalClientId(e.target.value)}
-                placeholder="Klistra in ditt OAuth Client ID..."
-                style={{width:"100%",padding:"7px 10px",borderRadius:7,border:`1.5px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontFamily:"inherit",outline:"none",marginBottom:8,boxSizing:"border-box"}}/>
-              <button onClick={gcal?.connect} disabled={!gcalClientId?.trim()}
-                style={{width:"100%",padding:"8px",borderRadius:8,border:"none",background:gcalClientId?.trim()?T.blue:"#ccc",color:"#fff",fontWeight:700,fontSize:12,cursor:gcalClientId?.trim()?"pointer":"not-allowed",fontFamily:"inherit"}}>
-                Anslut Google Kalender
-              </button>
-              <p style={{fontSize:9,color:T.textDim,marginTop:6,lineHeight:1.5}}>
-                1. Aktivera Calendar API &nbsp;2. Skapa OAuth 2.0 Client ID &nbsp;3. Lägg till http://localhost:3000 som auktoriserad origin
-              </p>
-            </div>
-          )}
+          ))}
+          <button onClick={addCal} style={{width:"100%",padding:"7px",borderRadius:8,border:`1px dashed ${T.border}`,background:"transparent",color:T.amber,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+ Lägg till kalender</button>
         </>}
 
         {/* ── MODULER ── */}
@@ -2228,7 +2250,7 @@ function ListorTab({T,bucketList,setBucketList,sommarList,setSommarList}){
 
 /* ═══ FAMILJEASSISTENTEN ════════════════════════════════════════ */
 function FamiljeAssistentTab({T,tasks,flowMeds,family}){
-  const [calEvents]=useLocalStorage("fp_calevents",[]);
+  const [calEvents]=useSharedEvents();
   const now=new Date();
   const todayStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
   const hour=now.getHours();
@@ -2387,19 +2409,32 @@ function FamiljeAssistentTab({T,tasks,flowMeds,family}){
 export default function App(){
   const now=useClock();
   const [showOnboarding,setShowOnboarding]=useLocalStorage("fp_onboarding",true);
-  const [family,setFamily]=useLocalStorage("fp_family",{name:"Familjen",members:[]});
+  const [family,setFamily]=useSharedFamily();
   const [cfg,setCfg]=useLocalStorage("fp_cfg",{dark:false,showPhoto:true,photoDim:28,guestMode:false,morningOn:true,morningT:"07:00",eveningOn:true,eveningT:"20:00",keepAwake:true,enabledTabs:ALL_MODULES.map(m=>m.id)});
   const [showSettings,setShowSettings]=useState(false);
   const [activeTab,setActiveTab]=useState("kanban");
   const [calendarMode,setCalendarMode]=useState(false);
-  const [tasks,setTasks]=useLocalStorage("fp_tasks",[]);
+  const [tasks,setTasks]=useSharedTasks();
   const [backlog,setBacklog]=useLocalStorage("fp_backlog",[]);
   const [flowMeds,setFlowMeds]=useLocalStorage("fp_meds",Object.fromEntries(FLOWS.map(f=>[f.id,f.meds.map(m=>({...m}))])));
   const [lamps,setLamps]=useLocalStorage("fp_lamps",INIT_LAMPS);
   const [familyMeals,setFamilyMeals]=useLocalStorage("fp_meals",DEFAULT_FAMILY_MEALS);
   const [schoolMenu,setSchoolMenu]=useLocalStorage("fp_schoolmenu",DEFAULT_SCHOOL_MENU);
-  const [gcalClientId,setGcalClientId]=useLocalStorage("fp_gcal_clientid","");
-  const gcal=useGoogleCalendar(gcalClientId);
+  // Google Kalender via hemliga iCal-länkar (ingen OAuth), flera kalendrar.
+  // Delas med Klara-designen via samma nyckel 'kl_gcal'. Servern proxar varje
+  // .ics-feed i /api/calendar. Se src/gcal.js + src/useIcsCalendars.js.
+  const [gcalSettings,setGcalSettings]=useLocalStorage("kl_gcal",DEFAULT_GCAL);
+  const ics=useIcsCalendars(activeCalendars(gcalSettings));
+  const gcal={
+    connected:activeCalendars(gcalSettings).length>0,
+    // CalPanel använder ev.time i toMin — sätt tom sträng (→ NaN, ingen krasch).
+    // Färg sätts redan per kalender i useIcsCalendars.
+    events:(ics.events||[]).map(e=>({time:"",...e})),
+    loading:ics.loading,
+    error:ics.error,
+    connect:()=>setShowSettings(true),               // iCal anges i inställningarna
+    disconnect:()=>setGcalSettings(s=>({...s,enabled:false})),
+  };
   const [choresDone,setChoresDone]=useLocalStorage("fp_chores_done",{});
   const [choresList,setChoresList]=useLocalStorage("fp_chores_list",null); // null = använd CHORES_LIST från constants
   const [templates,setTemplates]=useLocalStorage("fp_templates",DEFAULT_TEMPLATES);
@@ -2550,7 +2585,7 @@ export default function App(){
       {showSettings&&<Settings T={T} cfg={cfg} setCfg={setCfg} family={family} setFamily={setFamily}
         familyMeals={familyMeals} setFamilyMeals={setFamilyMeals}
         schoolMenu={schoolMenu} setSchoolMenu={setSchoolMenu}
-        gcal={gcal} gcalClientId={gcalClientId} setGcalClientId={setGcalClientId}
+        gcal={gcal} gcalSettings={gcalSettings} setGcalSettings={setGcalSettings}
         flowMeds={flowMeds} setFlowMeds={setFlowMeds}
         choresList={choresList||CHORES_LIST} setChoresList={setChoresList}
         setChoresDone={setChoresDone}

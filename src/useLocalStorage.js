@@ -109,7 +109,6 @@ export function useLocalStorage(key, init) {
       if (!alive) return;
       if (key in serverData) {
         const serverVal = serverData[key];
-        // Uppdatera localStorage och state från servern
         try { localStorage.setItem(key, JSON.stringify(serverVal)); } catch {}
         setVal(serverVal);
       }

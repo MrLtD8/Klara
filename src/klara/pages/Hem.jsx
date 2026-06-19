@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
+import useIcsCalendars from '../../useIcsCalendars';
+import { DEFAULT_GCAL, activeCalendars } from '../../gcal';
 import {
   Calendar, CheckSquare, Users, Bell, Pill, Wallet, Settings2,
-  Wrench, Eye, EyeOff, Plus, Minus,
+  Wrench, Eye, EyeOff, Plus, Minus, GripVertical,
   ArrowRight, ChevronLeft, ChevronRight, ShoppingCart,
 } from 'lucide-react';
 
@@ -21,6 +23,18 @@ function getWeekDays() {
 }
 
 function isoDate(d) { return d.toISOString().split('T')[0]; }
+
+// Matchar en händelse mot en dag — hanterar veckovis/årlig upprepning, men
+// aldrig före startdatumet (samma logik som i Kalender.jsx).
+function matchesDay(ev, dayIso) {
+  if (!ev.recur || ev.recur === 'none') return ev.date === dayIso;
+  const evDate = new Date(ev.date + 'T12:00:00');
+  const day = new Date(dayIso + 'T12:00:00');
+  if (day < evDate) return false;
+  if (ev.recur === 'weekly') return evDate.getDay() === day.getDay();
+  if (ev.recur === 'yearly') return evDate.getMonth() === day.getMonth() && evDate.getDate() === day.getDate();
+  return ev.date === dayIso;
+}
 
 const DAY_LABELS = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 
@@ -48,6 +62,69 @@ function daysUntilDate(iso) {
   const today = new Date(); today.setHours(0,0,0,0);
   const target = new Date(iso + 'T00:00:00');
   return Math.round((target - today) / 86400000);
+}
+
+// ─── Live Clock ───────────────────────────────────────────────────────────────
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  const dayName = now.toLocaleDateString('sv-SE', { weekday: 'long' });
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  return (
+    <div style={{ textAlign: 'right', lineHeight: 1 }}>
+      <div style={{ fontFamily: T.fontMono, fontSize: 42, fontWeight: 400, letterSpacing: '-2px', color: T.text, lineHeight: 1 }}>
+        {hh}:{mm}
+        <span style={{ fontSize: 20, color: T.textHint, letterSpacing: 0 }}>:{ss}</span>
+      </div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: T.textHint, textTransform: 'uppercase', letterSpacing: '1.4px', marginTop: 3 }}>
+        {cap(dayName)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Flow strip (time-of-day) ─────────────────────────────────────────────────
+const FLOW_PERIODS = [
+  { id: 'morning',   label: 'Morgon',      sub: '06–10', icon: '🌅' },
+  { id: 'day',       label: 'Dag',         sub: '10–16', icon: '☀️' },
+  { id: 'afternoon', label: 'Eftermidd.',  sub: '16–19', icon: '⛅' },
+  { id: 'evening',   label: 'Kväll',       sub: '19–23', icon: '🌙' },
+];
+function getActivePeriod() {
+  const h = new Date().getHours();
+  if (h >= 6  && h < 10) return 'morning';
+  if (h >= 10 && h < 16) return 'day';
+  if (h >= 16 && h < 19) return 'afternoon';
+  return 'evening';
+}
+
+function FlowStrip() {
+  const active = getActivePeriod();
+  return (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+      {FLOW_PERIODS.map(p => {
+        const isActive = p.id === active;
+        return (
+          <div key={p.id} style={{
+            flex: 1, padding: '7px 4px', borderRadius: 10,
+            border: `1.5px solid ${isActive ? T.purple + 'AA' : T.border}`,
+            background: isActive ? T.purpleLight : 'transparent',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+          }}>
+            <span style={{ fontSize: 15 }}>{p.icon}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? T.purple : T.textHint }}>{p.label}</span>
+            <span style={{ fontFamily: T.fontMono, fontSize: 8, color: isActive ? T.purple : T.textHint }}>{p.sub}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ─── Widget metadata (icons matching sidebar) ─────────────────────────────────
@@ -219,6 +296,141 @@ function KanbanWidget({ tasks, setTasks, lanes, getMember, cols }) {
   );
 }
 
+// ─── Medicine checklist helpers ──────────────────────────────────────────────
+const MED_TIMES = [
+  { id: 'morning', label: 'Morgon', icon: '🌅', color: '#F59E0B', bg: '#FFFBEB', time: '08:00' },
+  { id: 'midday',  label: 'Middag', icon: '☀️',  color: '#F97316', bg: '#FFF7ED', time: '12:00' },
+  { id: 'evening', label: 'Kväll',  icon: '🌙',  color: '#6366F1', bg: '#EEF2FF', time: '20:00' },
+];
+
+function getCurrentPeriod() {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 12) return 'morning';
+  if (h >= 12 && h < 18) return 'midday';
+  return 'evening';
+}
+
+function MedicinChecklist({ medicins, setMedicins, medicinToday, setMedicinToday, members }) {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const takenToday = medicinToday.date === todayStr ? medicinToday.taken : {};
+  const currentPeriod = getCurrentPeriod();
+
+  function isTaken(medId, period) {
+    return (takenToday[medId] || []).includes(period);
+  }
+
+  function toggleTaken(med, period) {
+    const currentTaken = medicinToday.date === todayStr ? medicinToday.taken : {};
+    const medPeriods = currentTaken[med.id] || [];
+    let newPeriods;
+    if (medPeriods.includes(period)) {
+      // Avmarkera — minska inte lagret, bara ta bort bocken
+      newPeriods = medPeriods.filter(p => p !== period);
+    } else {
+      // Bocka — logga dos och minska lager
+      newPeriods = [...medPeriods, period];
+      const now = new Date();
+      setMedicins(prev => prev.map(m => m.id !== med.id ? m : {
+        ...m,
+        stock: Math.max(0, m.stock - m.dose),
+        lastGiven: now.toISOString(),
+        log: [{ time: now.toLocaleString('sv-SE'), period }, ...(m.log || [])].slice(0, 30),
+      }));
+    }
+    setMedicinToday({ date: todayStr, taken: { ...currentTaken, [med.id]: newPeriods } });
+  }
+
+  const periodsWithMeds = MED_TIMES.filter(tod => medicins.some(m => m.times?.[tod.id]));
+
+  if (medicins.length === 0) {
+    return <div style={{ fontSize: 13, color: T.textMuted }}>Inga mediciner inlagda.</div>;
+  }
+  if (periodsWithMeds.length === 0) {
+    return <div style={{ fontSize: 13, color: T.textMuted }}>Inga tider konfigurerade.</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {periodsWithMeds.map(tod => {
+        const todMeds = medicins.filter(m => m.times?.[tod.id]);
+        const takenCount = todMeds.filter(m => isTaken(m.id, tod.id)).length;
+        const allTaken = takenCount === todMeds.length;
+        const isCurrent = tod.id === currentPeriod;
+
+        return (
+          <div key={tod.id} style={{
+            background: isCurrent ? tod.bg : T.bg,
+            borderRadius: T.radiusSm,
+            border: `1px solid ${isCurrent ? tod.color + '55' : T.border}`,
+            padding: '10px 12px',
+          }}>
+            {/* Period-rubrik */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 14 }}>{tod.icon}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: tod.color }}>{tod.label}</span>
+                <span style={{ fontSize: 11, color: T.textMuted }}>{tod.time}</span>
+                {isCurrent && (
+                  <span style={{ fontSize: 10, background: tod.color, color: '#fff', borderRadius: 999, padding: '1px 6px', fontWeight: 700 }}>Nu</span>
+                )}
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: allTaken ? T.green : T.textMuted }}>
+                {allTaken ? '✅ Klart!' : `${takenCount}/${todMeds.length}`}
+              </span>
+            </div>
+
+            {/* Medicin-rader med kryssrutor */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {todMeds.map(med => {
+                const taken = isTaken(med.id, tod.id);
+                const member = members?.find(m => m.id === med.who);
+                return (
+                  <button
+                    key={med.id}
+                    onClick={() => toggleTaken(med, tod.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      background: taken ? T.greenLight : T.card,
+                      border: `1px solid ${taken ? T.green + '55' : T.border}`,
+                      borderRadius: T.radiusSm, padding: '7px 10px',
+                      cursor: 'pointer', textAlign: 'left', width: '100%',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {/* Kryssruta */}
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                      background: taken ? T.green : 'transparent',
+                      border: `2px solid ${taken ? T.green : T.border}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all 0.15s',
+                    }}>
+                      {taken && <span style={{ color: '#fff', fontSize: 12, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                    </div>
+                    {/* Namn + dos */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 13, fontWeight: 600,
+                        color: taken ? T.green : T.text,
+                        textDecoration: taken ? 'line-through' : 'none',
+                      }}>
+                        {med.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textMuted }}>
+                        {med.dose} {med.form?.toLowerCase()}{member ? ` · ${member.name}` : ''}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ icon: Icon, iconColor, iconBg, value, label, onClick }) {
   const [hov, setHov] = useState(false);
@@ -228,19 +440,21 @@ function StatCard({ icon: Icon, iconColor, iconBg, value, label, onClick }) {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        background: T.card, border: `1px solid ${hov ? iconColor + '55' : T.border}`,
-        borderRadius: T.radius, padding: '18px 20px',
+        background: T.cardGlass,
+        backdropFilter: 'blur(20px) saturate(1.6)', WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
+        border: `1px solid ${hov ? iconColor + '66' : T.border}`,
+        borderRadius: T.radiusLg, padding: '16px 18px',
         boxShadow: hov ? T.shadowMd : T.shadow,
         cursor: 'pointer', textAlign: 'left',
-        display: 'flex', alignItems: 'center', gap: 16, transition: 'all 0.15s',
+        display: 'flex', alignItems: 'center', gap: 14, transition: 'all 0.15s',
       }}
     >
-      <div style={{ width: 48, height: 48, borderRadius: 14, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <Icon size={22} color={iconColor} strokeWidth={2} />
+      <div style={{ width: 44, height: 44, borderRadius: 13, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={20} color={iconColor} strokeWidth={2} />
       </div>
       <div>
-        <div style={{ fontSize: 28, fontWeight: 800, color: T.text, lineHeight: 1 }}>{value}</div>
-        <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4, whiteSpace: 'nowrap' }}>{label}</div>
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 700, color: T.text, lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: 11, color: T.textHint, marginTop: 4, whiteSpace: 'nowrap', fontWeight: 500 }}>{label}</div>
       </div>
     </button>
   );
@@ -261,10 +475,17 @@ function ColControls({ editMode, cols, onIncrCols, onDecrCols, onHide }) {
 }
 
 // ─── Widget wrapper ────────────────────────────────────────────────────────────
-function Widget({ id, title, onGo, goLabel = 'Visa alla →', children, editMode, onIncrCols, onDecrCols, onHide, cols }) {
+function Widget({ id, title, onGo, goLabel = 'Visa alla →', children, editMode, onIncrCols, onDecrCols, onHide, cols, onHandleDragStart }) {
   const { Icon, color = T.purple } = WIDGET_META[id] || {};
   return (
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 20, boxShadow: T.shadow, height: '100%', boxSizing: 'border-box' }}>
+    <div style={{
+      background: T.cardGlass,
+      backdropFilter: 'blur(20px) saturate(1.6)', WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
+      border: `1px solid ${T.border}`,
+      borderRadius: T.radiusLg,
+      padding: 18, boxShadow: T.shadow,
+      height: '100%', boxSizing: 'border-box',
+    }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         {/* Icon + title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -277,6 +498,11 @@ function Widget({ id, title, onGo, goLabel = 'Visa alla →', children, editMode
         </div>
         {/* Actions */}
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {editMode && (
+            <span draggable onDragStart={onHandleDragStart} title="Dra för att flytta widgeten" style={{ cursor: 'grab', color: T.textMuted, display: 'flex', alignItems: 'center', padding: '0 2px' }}>
+              <GripVertical size={16} />
+            </span>
+          )}
           <ColControls editMode={editMode} cols={cols} onIncrCols={onIncrCols} onDecrCols={onDecrCols} onHide={onHide} />
           {onGo && (
             <button onClick={onGo} style={{ background: 'none', border: 'none', color: T.purple, fontSize: 13, cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -294,8 +520,13 @@ function Widget({ id, title, onGo, goLabel = 'Visa alla →', children, editMode
 export default function Hem({ members, tasks, setTasks, events, onNavigate, guestMode = false }) {
   const [carItems]   = useLocalStorage('kl_car',    []);
   const [houseItems] = useLocalStorage('kl_house',  []);
-  const [medicins]   = useLocalStorage('kl_medicin',[]);
+  const [medicins, setMedicins]   = useLocalStorage('kl_medicin',[]);
+  const [medicinToday, setMedicinToday] = useLocalStorage('kl_medicin_today', { date: '', taken: {} });
   const [budget]     = useLocalStorage('kl_budget', []);
+  const [calEvents]  = useLocalStorage('kl_cal_events', []);   // riktiga kalendern (delas med grå designen)
+  const [gcalSettings] = useLocalStorage('kl_gcal', DEFAULT_GCAL);
+  const { events: gcalEvents } = useIcsCalendars(activeCalendars(gcalSettings));
+  const allEvents = [...calEvents, ...gcalEvents];
   const [widgets, setWidgets] = useLocalStorage('kl_hem_widgets', DEFAULT_WIDGETS);
   const [editMode, setEditMode] = useState(false);
 
@@ -304,7 +535,14 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
   const weekDays = getWeekDays();
   const weekIsos = weekDays.map(isoDate);
 
-  const eventsThisWeek = events.filter(e => weekIsos.includes(e.date));
+  // Alla händelse-tillfällen denna vecka (expanderar upprepningar per dag), sorterade
+  const weekOccurrences = [];
+  weekDays.forEach(day => {
+    const iso = isoDate(day);
+    allEvents.forEach(ev => { if (matchesDay(ev, iso)) weekOccurrences.push({ ev, iso }); });
+  });
+  weekOccurrences.sort((a, b) => a.iso.localeCompare(b.iso));
+  const eventsThisWeek = weekOccurrences;
   const tasksTodo      = tasks.filter(t => t.lane === 'ready');
   const activeMembers  = members.length;
 
@@ -327,6 +565,40 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
     setWidgets(prev => prev.map(w => w.id === id ? { ...w, ...patch } : w));
   }
 
+  // ── Dra-och-släpp för att flytta runt widgets (via draghandtaget) ──
+  const [dragId, setDragId] = useState(null);
+  const [overId, setOverId] = useState(null);
+
+  function onWidgetDragStart(e, id) {
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  }
+  function onWidgetDragOver(e, id) {
+    if (!editMode) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (id !== overId) setOverId(id);
+  }
+  function onWidgetDrop(e, targetId) {
+    e.preventDefault();
+    const id = e.dataTransfer.getData('text/plain') || dragId;
+    setOverId(null); setDragId(null);
+    if (!id || id === targetId) return;
+    setWidgets(prev => {
+      // migrera ev. gammalt 'size' → 'cols' så inget tappas vid omordning
+      const arr = prev.map(w => (w.cols !== undefined ? w : { ...w, cols: ({ full: 4, half: 2, third: 1 }[w.size] || 2) }));
+      const from = arr.findIndex(w => w.id === id);
+      const to   = arr.findIndex(w => w.id === targetId);
+      if (from === -1 || to === -1) return prev;
+      const copy = [...arr];
+      const [moved] = copy.splice(from, 1);
+      copy.splice(to, 0, moved);
+      return copy;
+    });
+  }
+  function onWidgetDragEnd() { setDragId(null); setOverId(null); }
+
   // Migrate old 'size' field to 'cols'
   const migratedWidgets = widgets.map(w => {
     if (w.cols !== undefined) return w;
@@ -345,6 +617,7 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
       onIncrCols: () => updateWidget(w.id, { cols: Math.min(4, w.cols + 1) }),
       onDecrCols: () => updateWidget(w.id, { cols: Math.max(1, w.cols - 1) }),
       onHide:     () => updateWidget(w.id, { visible: false }),
+      onHandleDragStart: e => onWidgetDragStart(e, w.id),
     };
   }
 
@@ -356,13 +629,23 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
 
         // ── Kalender ──────────────────────────────────────────────────────────
         case 'kalender': return (
-          <div key={w.id} style={{ gridColumn: `span ${colSpan}` }}>
+          <div
+            key={w.id}
+            onDragOver={editMode ? e => onWidgetDragOver(e, w.id) : undefined}
+            onDrop={editMode ? e => onWidgetDrop(e, w.id) : undefined}
+            style={{
+              gridColumn: `span ${colSpan}`,
+              opacity: dragId === w.id ? 0.4 : 1,
+              outline: (overId === w.id && dragId && dragId !== w.id) ? `2px dashed ${T.purple}` : 'none',
+              outlineOffset: 3, borderRadius: T.radiusLg, transition: 'opacity 0.15s',
+            }}
+          >
             <Widget title="Veckans kalender" onGo={() => onNavigate('kalender')} {...wProps(w)}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
                 {weekDays.map((day, i) => {
                   const iso = isoDate(day);
                   const isToday = iso === todayIso;
-                  const dayEvents = events.filter(e => e.date === iso);
+                  const dayEvents = allEvents.filter(e => matchesDay(e, iso));
                   return (
                     <div key={i} style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4, fontWeight: 500 }}>{DAY_LABELS[i]}</div>
@@ -371,7 +654,7 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {dayEvents.slice(0, 2).map(ev => (
-                          <div key={ev.id} style={{ background: ev.color, borderRadius: 4, height: 4 }} title={ev.title} />
+                          <div key={ev.id} style={{ background: ev.color || T.purple, borderRadius: 4, height: 4 }} title={ev.title} />
                         ))}
                         {dayEvents.length > 2 && <div style={{ fontSize: 10, color: T.textMuted }}>+{dayEvents.length - 2}</div>}
                       </div>
@@ -379,15 +662,15 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
                   );
                 })}
               </div>
-              {eventsThisWeek.length > 0 && (
+              {eventsThisWeek.filter(o => o.iso >= todayIso).length > 0 && (
                 <div style={{ marginTop: 14, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
                   <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 8, fontWeight: 600 }}>Kommande händelser</div>
-                  {eventsThisWeek.slice(0, 3).map(ev => (
-                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
+                  {eventsThisWeek.filter(o => o.iso >= todayIso).slice(0, 3).map(({ ev, iso }) => (
+                    <div key={ev.id + iso} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.color || T.purple, flexShrink: 0 }} />
                       <span style={{ fontSize: 13, color: T.text, flex: 1 }}>{ev.title}</span>
                       <span style={{ fontSize: 11, color: T.textMuted }}>
-                        {new Date(ev.date + 'T12:00:00').toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        {new Date(iso + 'T12:00:00').toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })}
                       </span>
                     </div>
                   ))}
@@ -403,7 +686,17 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
 
         // ── Uppgifter ─────────────────────────────────────────────────────────
         case 'uppgifter': return (
-          <div key={w.id} style={{ gridColumn: `span ${colSpan}` }}>
+          <div
+            key={w.id}
+            onDragOver={editMode ? e => onWidgetDragOver(e, w.id) : undefined}
+            onDrop={editMode ? e => onWidgetDrop(e, w.id) : undefined}
+            style={{
+              gridColumn: `span ${colSpan}`,
+              opacity: dragId === w.id ? 0.4 : 1,
+              outline: (overId === w.id && dragId && dragId !== w.id) ? `2px dashed ${T.purple}` : 'none',
+              outlineOffset: 3, borderRadius: T.radiusLg, transition: 'opacity 0.15s',
+            }}
+          >
             <Widget title="Uppgifter" onGo={() => onNavigate('uppgifter')} {...wProps(w)}>
               <KanbanWidget tasks={tasks} setTasks={setTasks} lanes={lanes} getMember={getMember} cols={w.cols} />
               <button
@@ -416,12 +709,22 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
 
         // ── Familj ────────────────────────────────────────────────────────────
         case 'familj': return (
-          <div key={w.id} style={{ gridColumn: `span ${colSpan}` }}>
+          <div
+            key={w.id}
+            onDragOver={editMode ? e => onWidgetDragOver(e, w.id) : undefined}
+            onDrop={editMode ? e => onWidgetDrop(e, w.id) : undefined}
+            style={{
+              gridColumn: `span ${colSpan}`,
+              opacity: dragId === w.id ? 0.4 : 1,
+              outline: (overId === w.id && dragId && dragId !== w.id) ? `2px dashed ${T.purple}` : 'none',
+              outlineOffset: 3, borderRadius: T.radiusLg, transition: 'opacity 0.15s',
+            }}
+          >
             <Widget title="Familjen" onGo={() => onNavigate('familj')} goLabel="Hantera →" {...wProps(w)}>
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 {members.map(m => {
                   const memberTasks  = tasks.filter(t => t.mids.includes(m.id) && t.lane !== 'done');
-                  const memberEvents = events.filter(e => e.memberIds?.includes(m.id) && weekIsos.includes(e.date));
+                  const memberEvents = allEvents.filter(e => e.who && e.who.toLowerCase().includes(m.name.toLowerCase()) && weekIsos.some(iso => matchesDay(e, iso)));
                   return (
                     <div key={m.id} style={{ textAlign: 'center', minWidth: 70 }}>
                       <div
@@ -448,17 +751,31 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
 
         // ── Påminnelse-quote ──────────────────────────────────────────────────
         case 'pamill': return (
-          <div key={w.id} style={{ gridColumn: `span ${colSpan}` }}>
+          <div
+            key={w.id}
+            onDragOver={editMode ? e => onWidgetDragOver(e, w.id) : undefined}
+            onDrop={editMode ? e => onWidgetDrop(e, w.id) : undefined}
+            style={{
+              gridColumn: `span ${colSpan}`,
+              opacity: dragId === w.id ? 0.4 : 1,
+              outline: (overId === w.id && dragId && dragId !== w.id) ? `2px dashed ${T.purple}` : 'none',
+              outlineOffset: 3, borderRadius: T.radiusLg, transition: 'opacity 0.15s',
+            }}
+          >
             <div style={{
-              background: `linear-gradient(135deg, ${T.purple}18 0%, ${T.purpleLight} 100%)`,
+              background: `linear-gradient(135deg, ${T.purple}14 0%, ${T.purpleLight} 100%)`,
+              backdropFilter: 'blur(20px) saturate(1.6)', WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
               border: `1px solid ${T.purple}33`,
-              borderRadius: T.radius, padding: 24, boxShadow: T.shadow,
+              borderRadius: T.radiusLg, padding: 22, boxShadow: T.shadow,
               display: 'flex', flexDirection: 'column', justifyContent: 'center',
               position: 'relative', overflow: 'hidden', minHeight: 140, height: '100%', boxSizing: 'border-box',
             }}>
               {/* Edit controls */}
               {editMode && (
-                <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 3 }}>
+                <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 3, alignItems: 'center' }}>
+                  <span draggable onDragStart={e => onWidgetDragStart(e, w.id)} title="Dra för att flytta widgeten" style={{ cursor: 'grab', color: T.textMuted, display: 'flex', alignItems: 'center' }}>
+                    <GripVertical size={16} />
+                  </span>
                   <ColControls
                     editMode={editMode}
                     cols={w.cols}
@@ -472,7 +789,7 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
               <div style={{ fontSize: 11, fontWeight: 700, color: T.purple, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
                 Veckans påminnelse
               </div>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 600, color: T.text, lineHeight: 1.5, fontStyle: 'italic' }}>
+              <p style={{ margin: 0, fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 600, fontStyle: 'italic', color: T.text, lineHeight: 1.5 }}>
                 "Små stunder tillsammans skapar de största minnena."
               </p>
               <div style={{ marginTop: 12, fontSize: 13, color: T.purple, fontWeight: 500 }}>🌸 Ha en fin vecka!</div>
@@ -482,7 +799,17 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
 
         // ── Bil & Hus ─────────────────────────────────────────────────────────
         case 'bilhus': return (
-          <div key={w.id} style={{ gridColumn: `span ${colSpan}` }}>
+          <div
+            key={w.id}
+            onDragOver={editMode ? e => onWidgetDragOver(e, w.id) : undefined}
+            onDrop={editMode ? e => onWidgetDrop(e, w.id) : undefined}
+            style={{
+              gridColumn: `span ${colSpan}`,
+              opacity: dragId === w.id ? 0.4 : 1,
+              outline: (overId === w.id && dragId && dragId !== w.id) ? `2px dashed ${T.purple}` : 'none',
+              outlineOffset: 3, borderRadius: T.radiusLg, transition: 'opacity 0.15s',
+            }}
+          >
             <Widget title="Bil & Hus" onGo={() => onNavigate('bilhus')} goLabel="Visa →" {...wProps(w)}>
               {[
                 ...carItems.filter(c => !c.done && daysUntilDate(c.due) <= 30).map(c => ({ ...c, _type: 'car' })),
@@ -512,22 +839,28 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
 
         // ── Medicin ───────────────────────────────────────────────────────────
         case 'medicin': return (
-          <div key={w.id} style={{ gridColumn: `span ${colSpan}` }}>
-            <Widget title="Medicin" onGo={() => onNavigate('medicin')} goLabel="Visa →" {...wProps(w)}>
+          <div
+            key={w.id}
+            onDragOver={editMode ? e => onWidgetDragOver(e, w.id) : undefined}
+            onDrop={editMode ? e => onWidgetDrop(e, w.id) : undefined}
+            style={{
+              gridColumn: `span ${colSpan}`,
+              opacity: dragId === w.id ? 0.4 : 1,
+              outline: (overId === w.id && dragId && dragId !== w.id) ? `2px dashed ${T.purple}` : 'none',
+              outlineOffset: 3, borderRadius: T.radiusLg, transition: 'opacity 0.15s',
+            }}
+          >
+            <Widget title="Medicin idag" onGo={() => onNavigate('medicin')} goLabel="Hantera →" {...wProps(w)}>
               {guestMode ? (
                 <div style={{ fontSize: 13, color: T.textMuted }}>🔒 Dold i gästläge</div>
-              ) : medicins.filter(m => m.dose > 0 && Math.floor(m.stock / m.dose) <= (m.threshold || 7)).length === 0 ? (
-                <div style={{ fontSize: 13, color: T.textMuted }}>Alla mediciner har bra lager ✅</div>
               ) : (
-                medicins.filter(m => m.dose > 0 && Math.floor(m.stock / m.dose) <= (m.threshold || 7)).slice(0, 3).map(med => {
-                  const days = Math.floor(med.stock / med.dose);
-                  return (
-                    <div key={med.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '6px 10px', background: T.redLight, borderRadius: T.radiusSm, borderLeft: `3px solid ${T.red}` }}>
-                      <span style={{ fontSize: 12, flex: 1, color: T.text }}>{med.name}</span>
-                      <span style={{ fontSize: 11, color: T.red, fontWeight: 600 }}>{days} dagar</span>
-                    </div>
-                  );
-                })
+                <MedicinChecklist
+                  medicins={medicins}
+                  setMedicins={setMedicins}
+                  medicinToday={medicinToday}
+                  setMedicinToday={setMedicinToday}
+                  members={members}
+                />
               )}
             </Widget>
           </div>
@@ -535,7 +868,17 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
 
         // ── Ekonomi ───────────────────────────────────────────────────────────
         case 'ekonomi': return (
-          <div key={w.id} style={{ gridColumn: `span ${colSpan}` }}>
+          <div
+            key={w.id}
+            onDragOver={editMode ? e => onWidgetDragOver(e, w.id) : undefined}
+            onDrop={editMode ? e => onWidgetDrop(e, w.id) : undefined}
+            style={{
+              gridColumn: `span ${colSpan}`,
+              opacity: dragId === w.id ? 0.4 : 1,
+              outline: (overId === w.id && dragId && dragId !== w.id) ? `2px dashed ${T.purple}` : 'none',
+              outlineOffset: 3, borderRadius: T.radiusLg, transition: 'opacity 0.15s',
+            }}
+          >
             <Widget title="Kommande betalningar" onGo={() => onNavigate('ekonomi')} goLabel="Visa →" {...wProps(w)}>
               {guestMode ? (
                 <div style={{ fontSize: 13, color: T.textMuted }}>🔒 Dold i gästläge</div>
@@ -561,24 +904,55 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
   }
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 1400 }}>
+    <div style={{
+      padding: '28px 36px', maxWidth: 1400,
+      background: `linear-gradient(160deg, ${T.purple}10 0%, ${T.bg} 30%, ${T.bgWarm})`,
+      minHeight: '100vh',
+    }}>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: T.text }}>
-            {greeting}, familjen! 👋
+      <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginBottom: 24 }}>
+
+        {/* Greeting */}
+        <div style={{ flex: 1 }}>
+          <h1 style={{ margin: 0, fontFamily: T.fontDisplay, fontSize: 28, fontWeight: 700, color: T.text, letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+            {greeting}, <span style={{ color: T.purple }}>familjen!</span> 👋
           </h1>
-          <p style={{ margin: '4px 0 0', color: T.textMuted, fontSize: 14 }}>
+          <p style={{ margin: '3px 0 0', color: T.textMuted, fontSize: 13, fontWeight: 500 }}>
             {today.toLocaleDateString('sv-SE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+
+        {/* Member avatars */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px', background: T.cardGlass, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: `1px solid ${T.border}`, borderRadius: 999, boxShadow: T.shadowSm }}>
+          {members.map((m, i) => (
+            <div key={m.id} style={{
+              width: 32, height: 32, borderRadius: '50%',
+              background: m.color, color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700, border: '2px solid #fff',
+              boxShadow: i === 0 ? `0 0 0 2px ${T.purple}` : 'none',
+              cursor: 'pointer',
+            }}
+              onClick={() => onNavigate('familj')}
+              title={m.name}
+            >
+              {m.initials}
+            </div>
+          ))}
+        </div>
+
+        {/* Live clock */}
+        <LiveClock />
+
+        {/* Controls */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             onClick={() => setEditMode(e => !e)}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              background: editMode ? T.purple : T.card,
+              background: editMode ? T.purple : T.cardGlass,
+              backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
               color: editMode ? '#fff' : T.textMuted,
               border: `1px solid ${editMode ? T.purple : T.border}`,
               borderRadius: T.radiusSm, padding: '9px 14px',
@@ -588,17 +962,14 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
             <Settings2 size={15} />
             {editMode ? 'Klar' : 'Anpassa'}
           </button>
-          <button
-            onClick={() => onNavigate('familj')}
-            style={{ background: T.purple, color: '#fff', border: 'none', borderRadius: T.radiusSm, padding: '10px 18px', fontSize: 14, fontWeight: 600, cursor: 'pointer', boxShadow: T.shadowMd }}
-          >
-            + Dela med familjen
-          </button>
         </div>
       </div>
 
+      {/* ── Aktivt flöde ─────────────────────────────────────────────── */}
+      <FlowStrip />
+
       {/* ── Stat cards ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 22, marginTop: 14 }}>
         <StatCard
           icon={Calendar} iconColor={T.purple} iconBg={T.purpleLight}
           value={eventsThisWeek.length} label="Händelser denna vecka"
@@ -626,7 +997,7 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
       {editMode && (
         <div style={{ marginBottom: 12, padding: '10px 16px', background: T.purpleLight, borderRadius: T.radiusSm, border: `1px solid ${T.purple}33`, display: 'flex', alignItems: 'center', gap: 10 }}>
           <Settings2 size={14} color={T.purple} />
-          <span style={{ fontSize: 13, color: T.purple, fontWeight: 600 }}>Anpassningsläge — använd +/− på varje widget för att ändra bredd (1–4 kolumner)</span>
+          <span style={{ fontSize: 13, color: T.purple, fontWeight: 600 }}>Anpassningsläge — dra i handtaget ⠿ för att flytta widgets, och +/− för att ändra bredd (1–4 kolumner)</span>
         </div>
       )}
 
@@ -636,7 +1007,7 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
 
       {/* ── Edit mode: hidden widgets + reset ───────────────────────────── */}
       {editMode && (
-        <div style={{ marginTop: 12, padding: 20, background: T.card, border: `1px dashed ${T.border}`, borderRadius: T.radius }}>
+        <div style={{ marginTop: 12, padding: 20, background: T.cardGlass, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: `1px dashed ${T.borderMid}`, borderRadius: T.radiusLg }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.textMuted, marginBottom: 14 }}>Dolda widgets</div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {hiddenWidgets.map(w => (

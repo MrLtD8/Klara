@@ -18,9 +18,9 @@ const fs      = require('fs');
 const path    = require('path');
 
 const app       = express();
-const PORT      = process.env.PORT      || 3000;
-const DATA_FILE = process.env.DATA_FILE || '/data/familjeapp.json';
-const PUBLIC    = path.join(__dirname, 'public');
+const PORT      = process.env.PORT       || 3000;
+const DATA_FILE = process.env.DATA_FILE  || '/data/familjeapp.json';
+const PUBLIC    = process.env.PUBLIC_DIR || path.join(__dirname, 'public');
 
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
@@ -62,12 +62,174 @@ app.post('/api/data', (req, res) => {
   }
 });
 
+// ── ICS-hjälpfunktioner (för Google Kalender-synk) ─────────────
+function unfoldLines(text) {
+  return text.replace(/\r\n/g, '\n').split('\n').reduce((lines, line) => {
+    if ((line.startsWith(' ') || line.startsWith('\t')) && lines.length) {
+      lines[lines.length - 1] += line.slice(1);
+    } else {
+      lines.push(line);
+    }
+    return lines;
+  }, []);
+}
+
+function parseIcsDate(value) {
+  const m = value.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (!m) return null;
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+function dateOnly(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const WEEKDAY_NUM = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+/**
+ * Expanderar en VEVENT till konkreta datum inom [windowStart, windowEnd], med
+ * hänsyn till RRULE (FREQ/INTERVAL/COUNT/UNTIL/BYDAY) och EXDATE. Detta gör att
+ * avslutade serier (UNTIL/COUNT) faktiskt slutar visas — istället för att en
+ * "weekly"-flagga matchas i all oändlighet på klienten.
+ */
+function expandDates(raw, windowStart, windowEnd) {
+  const out = [];
+  if (!raw.dtstart) return out;
+  const start = new Date(raw.dtstart + 'T12:00:00');
+  if (isNaN(start.getTime())) return out;
+  const ex = raw.exdates || new Set();
+
+  // Ej återkommande → en enda instans, filtrerad mot fönstret.
+  if (!raw.rrule || !raw.rrule.FREQ) {
+    if (start >= windowStart && start <= windowEnd && !ex.has(raw.dtstart)) out.push(raw.dtstart);
+    return out;
+  }
+
+  const rr = raw.rrule;
+  const freq = rr.FREQ;
+  const interval = Math.max(1, parseInt(rr.INTERVAL || '1', 10) || 1);
+  const count = rr.COUNT ? parseInt(rr.COUNT, 10) : null;
+  const until = rr.UNTIL ? new Date((parseIcsDate(rr.UNTIL) || '9999-12-31') + 'T23:59:59') : null;
+  let emitted = 0;            // räknar instanser från start (för COUNT)
+  const SAFETY = 3000;
+
+  // Lägger till ett kandidatdatum. Returnerar 'stop' när serien är slut.
+  const tryDate = d => {
+    if (until && d > until) return 'stop';
+    if (count !== null && emitted >= count) return 'stop';
+    if (d >= start) {
+      emitted++;
+      if (d > windowEnd) return 'stop';      // datum ökar monotont → klart
+      if (d >= windowStart && !ex.has(dateOnly(d))) out.push(dateOnly(d));
+    }
+    return 'continue';
+  };
+
+  if (freq === 'WEEKLY') {
+    const days = (rr.BYDAY
+      ? rr.BYDAY.split(',').map(s => WEEKDAY_NUM[s.replace(/^[+-]?\d+/, '')]).filter(n => n !== undefined)
+      : [start.getDay()]).sort((a, b) => a - b);
+    const weekStart = new Date(start);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // tillbaka till söndag
+    for (let i = 0; i < SAFETY; i++) {
+      let stop = false;
+      for (const wd of days) {
+        const d = new Date(weekStart); d.setDate(d.getDate() + wd);
+        if (tryDate(d) === 'stop') { stop = true; break; }
+      }
+      if (stop) break;
+      weekStart.setDate(weekStart.getDate() + 7 * interval);
+    }
+  } else if (freq === 'DAILY') {
+    const d = new Date(start);
+    for (let i = 0; i < SAFETY; i++) { if (tryDate(new Date(d)) === 'stop') break; d.setDate(d.getDate() + interval); }
+  } else if (freq === 'MONTHLY') {
+    const d = new Date(start);
+    for (let i = 0; i < 600; i++) { if (tryDate(new Date(d)) === 'stop') break; d.setMonth(d.getMonth() + interval); }
+  } else if (freq === 'YEARLY') {
+    const d = new Date(start);
+    for (let i = 0; i < 300; i++) { if (tryDate(new Date(d)) === 'stop') break; d.setFullYear(d.getFullYear() + interval); }
+  } else if (start >= windowStart && start <= windowEnd && !ex.has(raw.dtstart)) {
+    out.push(raw.dtstart); // okänd FREQ → bara startdatumet
+  }
+  return out;
+}
+
+function parseIcsEvents(text) {
+  const lines = unfoldLines(text);
+  const events = [];
+  let cur = null;
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const windowStart = new Date(today); windowStart.setDate(windowStart.getDate() - 7);
+  const windowEnd = new Date(today); windowEnd.setDate(windowEnd.getDate() + 180);
+
+  function flush(raw) {
+    if (!raw || !raw.dtstart) return;
+    const uid = raw.uid || Math.random().toString(36).slice(2);
+    for (const date of expandDates(raw, windowStart, windowEnd)) {
+      events.push({
+        id: 'gcal_' + uid + '_' + date,   // unikt per instans
+        type: 'gcal',
+        title: raw.summary || 'Händelse',
+        who: '',
+        date,
+        recur: 'none',                     // expanderat → konkreta datum
+      });
+    }
+  }
+
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') { cur = {}; continue; }
+    if (line === 'END:VEVENT') { flush(cur); cur = null; continue; }
+    if (!cur) continue;
+
+    const idx = line.indexOf(':');
+    if (idx === -1) continue;
+    const key = line.slice(0, idx);
+    const value = line.slice(idx + 1);
+    const name = key.split(';')[0];
+
+    if (name === 'SUMMARY') cur.summary = value.replace(/\\,/g, ',').replace(/\\n/gi, ' ');
+    else if (name === 'UID') cur.uid = value;
+    else if (name === 'DTSTART') cur.dtstart = parseIcsDate(value);
+    else if (name === 'EXDATE') {
+      cur.exdates = cur.exdates || new Set();
+      value.split(',').forEach(v => { const d = parseIcsDate(v); if (d) cur.exdates.add(d); });
+    }
+    else if (name === 'RRULE') {
+      cur.rrule = {};
+      value.split(';').forEach(part => { const [k, v] = part.split('='); cur.rrule[k] = v; });
+    }
+  }
+  return events;
+}
+
+// ── API: hämta Google Kalender via hemlig iCal-länk ────────────
+app.get('/api/calendar', async (req, res) => {
+  const icsUrl = req.query.url;
+  if (!icsUrl) return res.status(400).json({ error: 'Ingen URL angiven' });
+  try {
+    const response = await fetch(icsUrl);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const text = await response.text();
+    res.json({ events: parseIcsEvents(text) });
+  } catch (e) {
+    console.error('[familjeapp] Kalenderfel:', e.message);
+    res.status(502).json({ error: 'Kunde inte hämta kalendern: ' + e.message });
+  }
+});
+
 // ── Statiska filer (React-bygget) ─────────────────────────────
 app.use(express.static(PUBLIC));
 
-// SPA-fallback — alla okända URL:er skickas till index.html
+// SPA-fallback — alla okända URL:er skickas till index.html.
+// Vid lokal API-utveckling (dev-api.js) finns ingen byggd frontend här —
+// svara då med en hjälptext istället för att kasta ENOENT.
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(PUBLIC, 'index.html'));
+  const indexFile = path.join(PUBLIC, 'index.html');
+  if (fs.existsSync(indexFile)) res.sendFile(indexFile);
+  else res.status(404).send('Dev API-server — frontend körs separat (t.ex. http://localhost:3000).');
 });
 
 // ── Starta ───────────────────────────────────────────────────

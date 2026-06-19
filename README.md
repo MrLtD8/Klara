@@ -1,121 +1,160 @@
-# 🏡 FamiljePlan — Installationsguide
+# Klara — Familjeplanering för Home Assistant
 
-## Vad du behöver installera först
+En lokal familjedashboard som körs som ett Home Assistant-addon. Ingen molntjänst, inga konton — all data stannar hemma på ditt nätverk.
 
-1. **Node.js** — ladda ner från [nodejs.org](https://nodejs.org) (välj LTS-versionen)
-2. Det är allt!
+> **Aktuell version: 1.5.0** · [Ändringslogg](ha-addon/CHANGELOG.md)
 
----
+## Funktioner
 
-## Steg-för-steg
+### Två designer, ett datalager
 
-### 1. Skapa ett nytt projekt
+- **Klara** (lila) — detaljrik sidebar-design med full modulhantering
+- **Familjen** (grå) — kompakt dashboarddesign med flödesvy
+- Välj design i Inställningar — båda läser och skriver samma data
 
-Öppna **Kommandotolken** (sök på "cmd" i Start-menyn) och kör:
+### Kalender
 
-```
-npx create-react-app familjeplan
-cd familjeplan
-```
+- Vecko- och månadsvy med 18 aktivitetsstickers
+- Drag-och-släpp mellan dagar
+- Klicka på en händelse för att redigera den
+- Återkommande händelser (varje vecka / varje år)
+- **Vem**-dropdown med familjens namn
+- Snabb-bubblor för att återanvända senaste händelser
 
-Vänta ca 1–2 minuter medan det installeras.
+### Google Kalender-synk
 
-### 2. Kopiera in filerna
+- Koppla **flera Google-kalendrar** via hemlig iCal-länk — ingen OAuth
+- Varje kalender får eget namn, färg och på/av-knapp
+- Återkommande händelser expanderas server-side (UNTIL/COUNT/BYDAY/EXDATE)
+- Google-händelser visas med 📆-ikon och är skrivskyddade
+- **iCal-URL:en lagras bara på din enhet** — den skickas aldrig till någon server
 
-Gå till mappen `familjeplan/src/` och **ersätt** dessa filer med dina:
+### Dashboard (Hem)
 
-| Din fil | Klistra in i |
+- Veckans kalender med riktiga händelser (inkl. Google Kalender)
+- Flytta runt widgets med draghandtag i Anpassa-läget
+- Familjestatistik, tasks och fokus-widget
+
+### Sidomenyn (Klara)
+
+- Minimera till ikonläge med ett klick — sparas mellan sessioner
+- Aktivera/avaktivera moduler i Hantera appar
+
+### Övriga moduler
+
+| Modul | Beskrivning |
 |---|---|
-| `App.jsx` | `src/App.jsx` (ersätt den befintliga) |
-| `index.js` | `src/index.js` (ersätt den befintliga) |
-| `familjedashboard.jsx` | `src/familjedashboard.jsx` (ny fil) |
-| `familjeapp-mobile.jsx` | `src/familjeapp-mobile.jsx` (ny fil) |
+| Uppgifter | Kanban med prioritet, estimat, subtasks och epics |
+| Familj | Lokal CRUD med färgkodade avatarer |
+| Medicin | Tracker med doslogg och beställningströskel |
+| Ekonomi | Budget, kategorifördelning, kommande betalningar |
+| Bil & Hus | Underhållsplan med intervallbaserade påminnelser |
+| Kids & Sysslor | Poängsystem och aktivitetshjul |
+| Listor | Bucketlist och sommarlovslista |
+| Wellness | Hälsolog |
+| Assistent | AI-dagsrapport via Claude API |
 
-Ta bort dessa filer som create-react-app skapade (de behövs inte):
-- `src/App.css`
-- `src/App.test.js`
-- `src/logo.svg`
-- `src/reportWebVitals.js`
-- `src/setupTests.js`
+## Krav
 
-### 3. Starta appen
+- Home Assistant (OS, Container, Supervised — eller Animus Heart)
+- Node.js 18+ lokalt (för att bygga frontend)
 
-```
-npm start
-```
+## Installation
 
-Webbläsaren öppnas automatiskt på http://localhost:3000 🚀
+### 1. Hämta koden
 
----
-
-## Byta mellan dashboard och mobilapp
-
-Öppna `src/App.jsx` och kommentera/avkommentera:
-
-```jsx
-// iPad-dashboard (standard):
-import App from './familjedashboard';
-
-// Mobilapp (kommentera bort raden ovan, avkommentera denna):
-// import App from './familjeapp-mobile';
+```bash
+git clone https://github.com/Landerstedt/familjeapp.git
+cd familjeapp
 ```
 
----
+### 2. Bygg frontend
 
-## Bygga för produktion (Vercel / egen server)
-
-```
+```bash
+npm install
 npm run build
+cp -r build ha-addon/app/build
 ```
 
-Skapar en `build/`-mapp som du laddar upp till Vercel eller din server.
+### 3. Lägg addonet på Home Assistant
 
-### Publicera på Vercel (gratis)
-1. Skapa konto på [vercel.com](https://vercel.com)
-2. Installera Vercel CLI: `npm install -g vercel`
-3. Kör: `vercel` i projektmappen
-4. Följ instruktionerna — du får en publik URL direkt!
+Kopiera `ha-addon/`-mappen till HA:s `addons/`-mapp som en mapp med namnet `familjeapp`. Via Samba-delningen på Windows:
 
----
+```
+\\homeassistant\addons\familjeapp\
+```
+
+Mappen ska innehålla:
+```
+familjeapp/
+├── config.yaml
+├── Dockerfile
+├── server.js
+└── app/
+    └── build/      ← React-bygget från steg 2
+```
+
+### 4. Installera i Home Assistant
+
+1. **Inställningar → Add-ons → Add-on Store**
+2. Klicka **⋮ → Kontrollera uppdateringar** — "Familjeapp" dyker upp under Lokala tillägg
+3. Installera och starta
+
+Appen nås på `http://<din-ha-adress>:3000` eller direkt via HA:s sidopanel.
+
+## Lokal utveckling
+
+Starta hot-reload-miljö med real API (port 3000 + 3001):
+
+```bash
+npm run dev
+```
+
+Öppna `http://localhost:3000`. Data sparas i `.devdata/familjeapp.json` (gitignorerat).
+
+## Google Kalender (valfritt)
+
+Synka via hemlig iCal-länk — ingen OAuth eller Google Cloud-projekt behövs.
+
+1. Öppna [Google Kalender](https://calendar.google.com) → Inställningar → välj din kalender
+2. Scrolla till **Integrera kalender** → kopiera **Hemlig adress i iCal-format** (`.ics`-URL)
+3. I appen: **Inställningar → Google Kalender → Lägg till kalender**
+4. Klistra in URL:en, ge den ett namn och aktivera
+
+Länken ger läsåtkomst till kalendern — dela den inte offentligt. Den lagras bara lokalt på din HA-enhet och skickas aldrig vidare.
+
+## Uppdatera
+
+```bash
+git pull
+npm run build
+cp -r build ha-addon/app/build
+```
+
+Kopiera sedan `server.js`, `config.yaml` och `app/build/` till addons-mappen på HA och klicka **Rebuild** på addonet.
 
 ## iPad-installation
 
-1. Öppna er Vercel-URL i **Safari** på iPaden
-2. Tryck på dela-ikonen (□↑)
-3. Välj **"Lägg till på hemskärmen"**
-4. Den ser nu ut som en riktig app!
-5. Aktivera **Guided Access** (Inställningar → Tillgänglighet → Guided Access) 
-   så skärmen aldrig låser sig
+1. Öppna `http://<din-ha-adress>:3000` i Safari
+2. Dela → **Lägg till på hemskärmen**
+3. Aktivera **Guided Access** (Inställningar → Tillgänglighet) om du vill ha kiosläge
 
----
+## Säkerhet
 
-## Filer i projektet
+- All data lagras i en JSON-fil på din HA-enhet (`/data/familjeapp.json`)
+- Ingen data skickas till externa servrar
+- Google Kalender-synk sker server-side — appen hämtar iCal via HA-addonet, inte direkt från webbläsaren
+- iCal-URL:er (hemliga kalenderlänkar) lagras bara i datafilen och committas aldrig till git
 
-```
-familjeplan/
-├── src/
-│   ├── App.jsx                ← väljer vilken app som visas
-│   ├── index.js               ← React-startpunkt
-│   ├── familjedashboard.jsx   ← iPad-dashboarden
-│   └── familjeapp-mobile.jsx  ← Mobilappen
-├── public/
-│   └── index.html             ← skapas av create-react-app
-└── package.json               ← projektinfo
-```
+## Teknikstack
 
----
+| Del | Teknik |
+|---|---|
+| Frontend | React 18, inline styles, designtokens |
+| Backend | Express.js på Node 18 i Docker |
+| Lagring | JSON-fil på HA + localStorage som fallback |
+| Kalender-synk | Server-side iCal-proxy (ingen CORS) |
 
-## Vanliga problem
+## Licens
 
-**"npm: command not found"**
-→ Node.js är inte installerat. Gå till nodejs.org och installera.
-
-**Sidan är tom / röd feltext**
-→ Kontrollera att du ersatt App.jsx och index.js korrekt.
-
-**"Cannot find module './familjedashboard'"**
-→ Kontrollera att familjedashboard.jsx ligger i src/-mappen.
-
----
-
-Lycka till! 🎉
+MIT — använd, bygg vidare och dela gärna.

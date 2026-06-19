@@ -1,11 +1,7 @@
 import React, { useState } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
-import {
-  Home, Calendar, CheckSquare, GraduationCap, FolderOpen,
-  Wrench, Wallet, Star, List, Heart, Bot, BarChart2,
-  Users, MessageCircle, Pill, ExternalLink, Toggle,
-} from 'lucide-react';
+import { DEFAULT_GCAL, normalizeGcal, GCAL_COLORS, newCalendarId } from '../../gcal';
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const inputStyle = {
@@ -33,33 +29,16 @@ function Section({ title, children, action }) {
   );
 }
 
-// ─── Module definitions (for toggle list) ────────────────────────────────────
-const MODULE_LIST = [
-  { id: 'kalender',    label: 'Kalender · Planering · Skola', Icon: Calendar,    alwaysOn: false, desc: 'Veckokalender, planering och skoluppgifter' },
-  { id: 'uppgifter',   label: 'Uppgifter',             Icon: CheckSquare,  alwaysOn: false, desc: 'Kanban-tavla med uppgifter' },
-  { id: 'filer',       label: 'Filer & Länkar',        Icon: FolderOpen,   alwaysOn: false, desc: 'Dokument och viktiga länkar' },
-  { id: 'bilhus',      label: 'Bil & Hus',             Icon: Wrench,       alwaysOn: false, desc: 'Service, underhåll och påminnelser' },
-  { id: 'ekonomi',     label: 'Ekonomi',               Icon: Wallet,       alwaysOn: false, desc: 'Budget och utgiftsöversikt' },
-  { id: 'kids',        label: 'Kids & Sysslor',        Icon: Star,         alwaysOn: false, desc: 'Sysslor med poäng och aktivitetshjul' },
-  { id: 'listor',      label: 'Listor',                Icon: List,         alwaysOn: false, desc: 'Bucketlist och sommarlovslista' },
-  { id: 'wellness',    label: 'Wellness',              Icon: Heart,        alwaysOn: false, desc: 'Hälsolog och humörspårning' },
-  { id: 'assistent',   label: 'Assistent',             Icon: Bot,          alwaysOn: false, desc: 'AI-daglig rapport och sammanfattning' },
-  { id: 'kravdatabas', label: 'Kravdatabas',           Icon: BarChart2,    alwaysOn: false, desc: 'Alla krav och status' },
-  // Dolda som standard
-  { id: 'familj',      label: 'Familj (i meny)',       Icon: Users,        alwaysOn: false, desc: 'Familjeöversikt som separat menyval' },
-  { id: 'medicin',     label: 'Medicin (i meny)',      Icon: Pill,         alwaysOn: false, desc: 'Medicinhantering som separat menyval' },
-  { id: 'meddelanden', label: 'Meddelanden',           Icon: MessageCircle,alwaysOn: false, desc: 'Intern familjechatt (dold som standard)' },
-];
-
 // ─── Inställningar ────────────────────────────────────────────────────────────
-export default function Installningar({ members, setMembers, focus, setFocus, visiblePages = {}, setVisiblePages, onNavigate, showFocus, setShowFocus }) {
-  const [gcalSettings, setGcalSettings] = useLocalStorage('kl_gcal', { enabled: false, clientId: '', apiKey: '', calendarIds: '' });
-  const [gcalEdit, setGcalEdit] = useState(false);
-  const [tempGcal, setTempGcal] = useState(gcalSettings);
+export default function Installningar({ members, setMembers, focus, setFocus, onNavigate, showFocus, setShowFocus }) {
+  const [design, setDesign] = useLocalStorage('app_design', 'klara');
+  const [gcalSettings, setGcalSettings] = useLocalStorage('kl_gcal', DEFAULT_GCAL);
+  const gcalNorm = normalizeGcal(gcalSettings);
+  const updCal = (id, patch) => setGcalSettings(s => { const n = normalizeGcal(s); return { ...n, calendars: n.calendars.map(c => c.id === id ? { ...c, ...patch } : c) }; });
+  const addCal = () => setGcalSettings(s => { const n = normalizeGcal(s); const color = GCAL_COLORS[n.calendars.length % GCAL_COLORS.length]; return { ...n, enabled: true, calendars: [...n.calendars, { id: newCalendarId(), name: '', icsUrl: '', color, enabled: true }] }; });
+  const delCal = id => setGcalSettings(s => { const n = normalizeGcal(s); return { ...n, calendars: n.calendars.filter(c => c.id !== id) }; });
+  const cycleColor = id => setGcalSettings(s => { const n = normalizeGcal(s); return { ...n, calendars: n.calendars.map(c => { if (c.id !== id) return c; const i = GCAL_COLORS.indexOf(c.color); return { ...c, color: GCAL_COLORS[(i + 1) % GCAL_COLORS.length] }; }) }; });
 
-  const [familyName, setFamilyName]   = useState('Familjen');
-  const [editingFam, setEditingFam]   = useState(false);
-  const [tempFamName, setTempFamName] = useState('Familjen');
   const [focusEdit, setFocusEdit]     = useState(false);
   const [tempFocus, setTempFocus]     = useState(focus);
   const [editingMember, setEditingMember] = useState(null);
@@ -87,13 +66,11 @@ export default function Installningar({ members, setMembers, focus, setFocus, vi
     setAddingMember(false); setNewName(''); setNewRole(''); setNewInit(''); setNewColor(COLORS[0]);
   }
 
-  function toggleModule(id) {
-    setVisiblePages(prev => ({ ...prev, [id]: !prev[id] }));
-  }
-
-  function saveGcal() {
-    setGcalSettings(tempGcal);
-    setGcalEdit(false);
+  function chooseDesign(d) {
+    if (d === design) return;
+    setDesign(d);
+    // Designerna är separata React-träd — ladda om så rätt rot renderas.
+    setTimeout(() => window.location.reload(), 60);
   }
 
   return (
@@ -103,139 +80,92 @@ export default function Installningar({ members, setMembers, focus, setFocus, vi
         <p style={{ margin: '4px 0 0', color: T.textMuted, fontSize: 14 }}>Anpassa Klara för din familj</p>
       </div>
 
-      {/* ── Menymoduler ───────────────────────────────────────── */}
-      <Section title="🗂 Menymoduler">
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: T.textMuted }}>
-          Välj vilka moduler som ska visas i den vänstra menyn. Hem och Inställningar är alltid aktiva.
+      {/* ── Design ────────────────────────────────────────────── */}
+      <Section title="🎨 Design">
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: T.textMuted, lineHeight: 1.6 }}>
+          Välj utseende på appen. Båda designerna delar samma data — familj, uppgifter och kalender följer med oavsett vilken du väljer.
         </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {MODULE_LIST.map(mod => {
-            const { Icon } = mod;
-            const isOn = !!visiblePages[mod.id];
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {[
+            { id: 'klara',    name: 'Klara', desc: 'Lila, sidomeny, en sida per modul', swatch: ['#7C5CBF', '#A78BDA', '#EDE9F7'] },
+            { id: 'familjen', name: 'Familjen', desc: 'Grå/varm, klocka, flikar och dashboard', swatch: ['#8A7C68', '#C9A227', '#F2EDE4'] },
+          ].map(opt => {
+            const active = design === opt.id;
             return (
-              <div key={mod.id} style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: '10px 14px', borderRadius: T.radiusSm,
-                background: isOn ? T.purpleLight : T.bg,
-                border: `1px solid ${isOn ? T.purple + '44' : T.border}`,
-                transition: 'all 0.15s',
-              }}>
-                <div style={{
-                  width: 34, height: 34, borderRadius: 10,
-                  background: isOn ? T.purple : T.border,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0, transition: 'background 0.15s',
-                }}>
-                  <Icon size={16} color={isOn ? '#fff' : T.textMuted} strokeWidth={2} />
+              <button
+                key={opt.id}
+                onClick={() => chooseDesign(opt.id)}
+                style={{
+                  textAlign: 'left', cursor: 'pointer',
+                  border: `2px solid ${active ? T.purple : T.border}`,
+                  background: active ? T.purpleLight : T.bg,
+                  borderRadius: T.radiusSm, padding: 16, transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
+                  {opt.swatch.map(c => <div key={c} style={{ width: 22, height: 22, borderRadius: 6, background: c }} />)}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{mod.label}</div>
-                  <div style={{ fontSize: 12, color: T.textMuted }}>{mod.desc}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{opt.name}</span>
+                  {active && <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: T.purple, borderRadius: 999, padding: '1px 8px' }}>Aktiv</span>}
                 </div>
-                {/* Toggle switch */}
-                <button
-                  onClick={() => toggleModule(mod.id)}
-                  style={{
-                    width: 44, height: 24, borderRadius: 12,
-                    background: isOn ? T.purple : T.border,
-                    border: 'none', cursor: 'pointer', position: 'relative',
-                    transition: 'background 0.2s', flexShrink: 0,
-                  }}
-                >
-                  <div style={{
-                    position: 'absolute', top: 3,
-                    left: isOn ? 23 : 3,
-                    width: 18, height: 18, borderRadius: '50%',
-                    background: '#fff', transition: 'left 0.2s',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }} />
-                </button>
-              </div>
+                <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.4 }}>{opt.desc}</div>
+              </button>
             );
           })}
         </div>
       </Section>
 
-      {/* ── Google Kalender ───────────────────────────────────── */}
-      <Section title="📅 Google Kalender-integration">
-        <p style={{ margin: '0 0 14px', fontSize: 13, color: T.textMuted, lineHeight: 1.6 }}>
-          Koppla din Google Kalender för att se och synka händelser. Du behöver ett Google Cloud-projekt med Calendar API aktiverat.
-          <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" style={{ color: T.purple, marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-            Google Cloud Console <ExternalLink size={12} />
-          </a>
+      {/* ── Google Kalender (flera iCal-kalendrar) ────────────── */}
+      <Section
+        title="📅 Google Kalender-integration"
+        action={
+          <button
+            onClick={() => setGcalSettings(s => ({ ...normalizeGcal(s), enabled: !normalizeGcal(s).enabled }))}
+            style={{ width: 44, height: 24, borderRadius: 12, background: gcalNorm.enabled ? T.purple : T.border, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+            title={gcalNorm.enabled ? 'Aktiverad' : 'Avstängd'}
+          >
+            <div style={{ position: 'absolute', top: 3, left: gcalNorm.enabled ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+          </button>
+        }
+      >
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: T.textMuted, lineHeight: 1.6 }}>
+          Lägg till en eller flera hemliga iCal-länkar (i Google Kalender: Inställningar → välj en kalender → "Hemlig adress i iCal-format"). Varje Google-kalender har en egen länk. Klicka på färgrutan för att byta färg.
         </p>
 
-        {/* Status badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '8px 14px', borderRadius: T.radiusSm,
-            background: gcalSettings.enabled ? T.greenLight : T.bg,
-            border: `1px solid ${gcalSettings.enabled ? T.green : T.border}`,
-          }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: gcalSettings.enabled ? T.green : T.border }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: gcalSettings.enabled ? T.greenText : T.textMuted }}>
-              {gcalSettings.enabled ? 'Aktiverad' : 'Inte konfigurerad'}
-            </span>
-          </div>
-          <button onClick={() => { setTempGcal(gcalSettings); setGcalEdit(e => !e); }} style={editBtnSt}>
-            ✏️ {gcalEdit ? 'Avbryt' : 'Konfigurera'}
-          </button>
-        </div>
-
-        {gcalEdit && (
-          <div style={{ background: T.bg, borderRadius: T.radiusSm, padding: 18, border: `1px solid ${T.border}` }}>
-            <label style={labelStyle}>Client ID (från Google Cloud Console)</label>
-            <input
-              value={tempGcal.clientId}
-              onChange={e => setTempGcal(p => ({ ...p, clientId: e.target.value }))}
-              placeholder="xxxxx.apps.googleusercontent.com"
-              style={inputStyle}
-            />
-            <label style={labelStyle}>API-nyckel</label>
-            <input
-              value={tempGcal.apiKey}
-              onChange={e => setTempGcal(p => ({ ...p, apiKey: e.target.value }))}
-              placeholder="AIzaSy..."
-              style={inputStyle}
-            />
-            <label style={labelStyle}>Kalender-ID:n (kommaseparerade)</label>
-            <input
-              value={tempGcal.calendarIds}
-              onChange={e => setTempGcal(p => ({ ...p, calendarIds: e.target.value }))}
-              placeholder="primary, family@group.v.calendar.google.com"
-              style={inputStyle}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        {gcalNorm.calendars.map((c, i) => (
+          <div key={c.id} style={{ border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14, marginBottom: 12, background: T.bg }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <button onClick={() => cycleColor(c.id)} title="Byt färg" style={{ width: 26, height: 26, borderRadius: 7, background: c.color, border: 'none', cursor: 'pointer', flexShrink: 0 }} />
+              <input
+                value={c.name}
+                onChange={e => updCal(c.id, { name: e.target.value })}
+                placeholder={`Kalender ${i + 1} (t.ex. Familj, Jobb)`}
+                style={{ ...inputStyle, marginBottom: 0, flex: 1 }}
+              />
               <button
-                onClick={() => setTempGcal(p => ({ ...p, enabled: !p.enabled }))}
-                style={{
-                  width: 44, height: 24, borderRadius: 12,
-                  background: tempGcal.enabled ? T.purple : T.border,
-                  border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0,
-                }}
+                onClick={() => updCal(c.id, { enabled: !c.enabled })}
+                style={{ width: 44, height: 24, borderRadius: 12, background: c.enabled ? T.purple : T.border, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+                title={c.enabled ? 'Visas' : 'Dold'}
               >
-                <div style={{ position: 'absolute', top: 3, left: tempGcal.enabled ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                <div style={{ position: 'absolute', top: 3, left: c.enabled ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
               </button>
-              <span style={{ fontSize: 13, color: T.text, fontWeight: 500 }}>
-                {tempGcal.enabled ? 'Aktiverad' : 'Inaktiverad'}
-              </span>
+              <button onClick={() => delCal(c.id)} style={{ background: T.redLight, color: T.red, border: 'none', borderRadius: T.radiusSm, padding: '6px 10px', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>🗑</button>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={saveGcal} style={saveBtnSm}>Spara inställningar</button>
-              <button onClick={() => setGcalEdit(false)} style={cancelBtnSm}>Avbryt</button>
-            </div>
+            <input
+              value={c.icsUrl}
+              onChange={e => updCal(c.id, { icsUrl: e.target.value })}
+              placeholder="https://calendar.google.com/calendar/ical/.../private-.../basic.ics"
+              style={{ ...inputStyle, marginBottom: 0, fontSize: 12 }}
+            />
           </div>
+        ))}
+
+        {gcalNorm.calendars.length === 0 && (
+          <p style={{ fontSize: 13, color: T.textMuted, fontStyle: 'italic', margin: '0 0 12px' }}>Inga kalendrar tillagda ännu.</p>
         )}
 
-        {gcalSettings.enabled && gcalSettings.clientId && (
-          <div style={{ marginTop: 12, padding: '12px 16px', background: T.blueLight, borderRadius: T.radiusSm, border: `1px solid ${T.blue}33` }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: T.blue, marginBottom: 4 }}>ℹ️ Nästa steg</div>
-            <div style={{ fontSize: 12, color: T.text, lineHeight: 1.6 }}>
-              Lägg till <code style={{ background: T.bg, padding: '1px 5px', borderRadius: 4, fontSize: 11 }}>http://localhost:3000</code> som auktoriserat ursprung i din Google Cloud OAuth-konfiguration. Synkroniseringen startar automatiskt i Kalender-vyn när du navigerar dit.
-            </div>
-          </div>
-        )}
+        <button onClick={addCal} style={{ ...saveBtnSm, width: '100%', padding: '10px' }}>+ Lägg till kalender</button>
       </Section>
 
       {/* ── Familjemedlemmar ──────────────────────────────────── */}
@@ -374,7 +304,7 @@ export default function Installningar({ members, setMembers, focus, setFocus, vi
           {[
             { label: 'Version',   value: '2.0.0' },
             { label: 'Design',    value: 'Klara.' },
-            { label: 'Moduler',   value: `${MODULE_LIST.filter(m => visiblePages[m.id]).length + 2} aktiva` },
+            { label: 'Moduler',   value: 'Hantera appar →' },
             { label: 'Plattform', value: 'Web / Lokal' },
           ].map(({ label, value }) => (
             <div key={label} style={{ background: T.bg, borderRadius: T.radiusSm, padding: '12px 14px' }}>

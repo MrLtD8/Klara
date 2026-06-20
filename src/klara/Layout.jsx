@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLocalStorage } from '../useLocalStorage';
 import { T } from './theme';
 import Sidebar from './Sidebar';
+import KlaraOnboarding from './Onboarding';
 import Hem from './pages/Hem';
 import Kalender from './pages/Kalender';
 import Uppgifter from './pages/Uppgifter';
@@ -99,8 +100,15 @@ export default function KlaraLayout() {
   const [visiblePages,     setVisiblePages]     = useLocalStorage('kl_visible_pages', DEFAULT_VISIBLE);
   const [showFocus,        setShowFocus]        = useLocalStorage('kl_show_focus',    false);
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage('kl_sidebar_collapsed', false);
+  const [onboardingDone,   setOnboardingDone]   = useLocalStorage('kl_onboarding_done', false);
 
   const unreadCount = messages.filter(m => !m.read).length;
+
+  function handleOnboardingDone({ members: newMembers, visiblePages: newVisible }) {
+    if (newMembers?.length) setMembers(newMembers);
+    if (newVisible)  setVisiblePages(v => ({ ...v, ...newVisible }));
+    setOnboardingDone(true);
+  }
 
   const commonProps = { members, tasks, events, onNavigate: setPage };
 
@@ -134,6 +142,7 @@ export default function KlaraLayout() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: T.bg, fontFamily: T.fontBody }}>
+      {!onboardingDone && <KlaraOnboarding onDone={handleOnboardingDone} />}
       <Sidebar
         activePage={page}
         onNavigate={setPage}

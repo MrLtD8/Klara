@@ -1811,7 +1811,7 @@ function Onboarding({onDone}){
     <div style={{padding:"22px 24px"}}>
       {step===0&&<><p style={{fontSize:14,color:"#5A4E3C",lineHeight:1.7,textAlign:"center",marginBottom:20}}>Kalender, uppgifter, mediciner, matsedel och smarta hem — allt på ett ställe. Vi sätter upp det på 2 minuter!</p>
         <button onClick={()=>setStep(1)} style={{width:"100%",padding:"12px",borderRadius:12,border:"none",background:"#B8722A",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>Kom igång →</button></>}
-      {step===1&&<><p style={{fontSize:12,color:"#9A8E7C",marginBottom:10,textAlign:"center"}}>Visas i toppraden — t.ex. "Landerstedts" eller "Familjen Berg"</p>
+      {step===1&&<><p style={{fontSize:12,color:"#9A8E7C",marginBottom:10,textAlign:"center"}}>Visas i toppraden — t.ex. "Familjen Berg" eller "Svenssons"</p>
         <input value={fname} onChange={e=>setFname(e.target.value)} onKeyDown={e=>e.key==="Enter"&&setStep(2)} placeholder="er familjs namn..."
           style={{width:"100%",padding:"12px 14px",borderRadius:10,border:"2px solid #EDE0D4",fontSize:15,fontFamily:"'Fraunces',serif",color:"#1C1810",outline:"none",marginBottom:16,textAlign:"center",boxSizing:"border-box"}} autoFocus/>
         <div style={{display:"flex",gap:7}}><button onClick={()=>setStep(0)} style={{flex:1,padding:"10px",borderRadius:10,border:"1px solid #EDE0D4",background:"transparent",color:"#9A8E7C",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Tillbaka</button>

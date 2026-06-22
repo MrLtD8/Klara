@@ -52,7 +52,7 @@ En lokal familjedashboard som körs som ett Home Assistant-addon. Ingen molntjä
 | Kids & Sysslor | Poängsystem och aktivitetshjul |
 | Listor | Bucketlist och sommarlovslista |
 | Wellness | Hälsolog |
-| Assistent | AI-dagsrapport via Claude API |
+| Assistent | AI-dagsrapport via Claude API *(under utveckling)* |
 
 ## Krav
 

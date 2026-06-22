@@ -204,7 +204,19 @@ export default function Installningar({ members, setMembers, focus, setFocus, on
               </div>
               <div style={{ flex: 2 }}>
                 <label style={labelStyle}>Roll / Ålder</label>
-                <input value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="t.ex. Förälder, 12 år" style={inputStyle} />
+                <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                  {['Förälder', 'Barn'].map(r => (
+                    <button key={r} onClick={() => setNewRole(r === 'Barn' ? ' år' : r)} style={{ padding: '4px 12px', borderRadius: T.radiusSm, border: `1.5px solid ${(r === 'Förälder' && newRole === 'Förälder') || (r === 'Barn' && newRole.includes('år')) ? T.purple : T.border}`, background: (r === 'Förälder' && newRole === 'Förälder') || (r === 'Barn' && newRole.includes('år')) ? T.purpleLight : 'transparent', color: (r === 'Förälder' && newRole === 'Förälder') || (r === 'Barn' && newRole.includes('år')) ? T.purple : T.textMuted, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{r}</button>
+                  ))}
+                </div>
+                {newRole.includes('år') ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input value={newRole.replace(' år', '')} onChange={e => setNewRole(e.target.value.replace(/[^0-9]/g, '') + ' år')} placeholder="Ålder" style={{ ...inputStyle, width: 60, marginBottom: 0, textAlign: 'center' }} />
+                    <span style={{ fontSize: 13, color: T.textMuted }}>år</span>
+                  </div>
+                ) : (
+                  <input value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="t.ex. Förälder" style={inputStyle} />
+                )}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
@@ -234,7 +246,19 @@ export default function Installningar({ members, setMembers, focus, setFocus, on
                   </div>
                   <div style={{ flex: 2 }}>
                     <label style={labelStyle}>Roll</label>
-                    <input value={editRole} onChange={e => setEditRole(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }} />
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                      {['Förälder', 'Barn'].map(r => (
+                        <button key={r} onClick={() => setEditRole(r === 'Barn' ? ' år' : r)} style={{ padding: '4px 12px', borderRadius: T.radiusSm, border: `1.5px solid ${(r === 'Förälder' && editRole === 'Förälder') || (r === 'Barn' && editRole.includes('år')) ? T.purple : T.border}`, background: (r === 'Förälder' && editRole === 'Förälder') || (r === 'Barn' && editRole.includes('år')) ? T.purpleLight : 'transparent', color: (r === 'Förälder' && editRole === 'Förälder') || (r === 'Barn' && editRole.includes('år')) ? T.purple : T.textMuted, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{r}</button>
+                      ))}
+                    </div>
+                    {editRole.includes('år') ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input value={editRole.replace(' år', '')} onChange={e => setEditRole(e.target.value.replace(/[^0-9]/g, '') + ' år')} placeholder="Ålder" style={{ ...inputStyle, width: 60, marginBottom: 0, textAlign: 'center' }} />
+                        <span style={{ fontSize: 13, color: T.textMuted }}>år</span>
+                      </div>
+                    ) : (
+                      <input value={editRole} onChange={e => setEditRole(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }} />
+                    )}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>

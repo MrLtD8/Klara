@@ -312,7 +312,7 @@ export default function Kalender({ members }) {
   function hasConflict(dayIso) {
     const dayEvs = mergedEvents.filter(ev => eventMatchesDay(ev, dayIso));
     if (dayEvs.length < 2) return false;
-    const adults = members.filter(m => !m.role.includes('år'));
+    const adults = members.filter(m => !m.role?.includes('år') && m.role?.toLowerCase() !== 'barn');
     if (adults.length < 2) return false;
     const whoText = dayEvs.map(ev => ev.who || '').join(' ').toLowerCase();
     const adultsPresent = adults.filter(m => whoText.includes(m.name.toLowerCase()));

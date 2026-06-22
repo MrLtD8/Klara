@@ -131,7 +131,7 @@ export default function Kids({ members = [] }) {
   // Activity form
   const [newActivity,   setNewActivity]   = useState('');
 
-  const kids = members.filter(m => m.role?.includes('år'));
+  const kids = members.filter(m => m.role?.includes('år') || m.role?.toLowerCase() === 'barn');
   const activeKid = selectedKid || kids[0]?.id;
 
   function kd(kidId) { return getKD(kidsData, kidId); }

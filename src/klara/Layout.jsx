@@ -97,6 +97,7 @@ export default function KlaraLayout() {
   const [messages,     setMessages]     = useLocalStorage('kl_messages',     defaultMessages);
   const [files,        setFiles]        = useLocalStorage('kl_files',        defaultFiles);
   const [focus,        setFocus]        = useLocalStorage('kl_focus',        'En sak i taget gör stor skillnad.');
+  const [familyName,   setFamilyName]   = useLocalStorage('kl_family_name',  '');
   const [visiblePages,     setVisiblePages]     = useLocalStorage('kl_visible_pages', DEFAULT_VISIBLE);
   const [showFocus,        setShowFocus]        = useLocalStorage('kl_show_focus',    false);
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage('kl_sidebar_collapsed', false);
@@ -104,7 +105,8 @@ export default function KlaraLayout() {
 
   const unreadCount = messages.filter(m => !m.read).length;
 
-  function handleOnboardingDone({ members: newMembers, visiblePages: newVisible }) {
+  function handleOnboardingDone({ familyName: fname, members: newMembers, visiblePages: newVisible }) {
+    if (fname) setFamilyName(fname);
     if (newMembers?.length) setMembers(newMembers);
     if (newVisible)  setVisiblePages(v => ({ ...v, ...newVisible }));
     setOnboardingDone(true);
@@ -114,13 +116,13 @@ export default function KlaraLayout() {
 
   function renderPage() {
     switch (page) {
-      case 'hem':          return <Hem {...commonProps} setTasks={setTasks} guestMode={guestMode} />;
+      case 'hem':          return <Hem {...commonProps} setTasks={setTasks} guestMode={guestMode} familyName={familyName} />;
       case 'kalender':     return <Kalender members={members} />;
       case 'uppgifter':    return <Uppgifter tasks={tasks} setTasks={setTasks} members={members} />;
       case 'familj':       return <Familj members={members} setMembers={setMembers} tasks={tasks} events={events} />;
       case 'meddelanden':  return <Meddelanden messages={messages} setMessages={setMessages} members={members} />;
       case 'filer':        return <FilerLankar files={files} setFiles={setFiles} />;
-      case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} onNavigate={setPage} showFocus={showFocus} setShowFocus={setShowFocus} />;
+      case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} onNavigate={setPage} showFocus={showFocus} setShowFocus={setShowFocus} familyName={familyName} setFamilyName={setFamilyName} />;
       case 'kravdatabas':  return <KravDatabas />;
       case 'medicin':      return <Medicin members={members} guestMode={guestMode} />;
       case 'bilhus':       return <BilHus />;

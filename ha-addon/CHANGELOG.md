@@ -1,5 +1,22 @@
 # Ändringslogg — Familjeapp
 
+## 1.6.0 (2026-06-22)
+
+### Onboarding (Klara)
+- Ny **steg-för-steg-tutorial** vid första start: välkommen, familjenamn, familjemedlemmar, modulval och rundtur.
+- **Familjenamn** visas i hälsningen på Hem-sidan ("God dag, Svenssons!") — ställs in i Inställningar eller vid onboarding.
+
+### Google Kalender i veckovy (Familjen)
+- Google Kalender-events visas nu direkt i **veckokalendern** i Familjen-designen (inte bara i sidopanelen). Events markeras med 📆 och är skrivskyddade.
+
+### Touch drag-and-drop (iPad)
+- **Kanban-tavlan** i Familjen-designen stödjer nu drag-and-drop på iPad/touch: håll fingret på ett kort (~200ms), dra till en annan kolumn och släpp.
+
+### Övrigt
+- Tog bort "Landerstedts" ur standardtext i Familjen-designen.
+
+---
+
 ## 1.5.0 (2026-06-19)
 
 ### Två designer som delar data

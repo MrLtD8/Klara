@@ -517,7 +517,7 @@ function Widget({ id, title, onGo, goLabel = 'Visa alla →', children, editMode
 }
 
 // ─── Hem ──────────────────────────────────────────────────────────────────────
-export default function Hem({ members, tasks, setTasks, events, onNavigate, guestMode = false }) {
+export default function Hem({ members, tasks, setTasks, events, onNavigate, guestMode = false, familyName = '' }) {
   const [carItems]   = useLocalStorage('kl_car',    []);
   const [houseItems] = useLocalStorage('kl_house',  []);
   const [medicins, setMedicins]   = useLocalStorage('kl_medicin',[]);
@@ -916,7 +916,7 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
         {/* Greeting */}
         <div style={{ flex: 1 }}>
           <h1 style={{ margin: 0, fontFamily: T.fontDisplay, fontSize: 28, fontWeight: 700, color: T.text, letterSpacing: '-0.01em', lineHeight: 1.1 }}>
-            {greeting}, <span style={{ color: T.purple }}>familjen!</span> 👋
+            {greeting}, <span style={{ color: T.purple }}>{familyName || 'familjen'}!</span> 👋
           </h1>
           <p style={{ margin: '3px 0 0', color: T.textMuted, fontSize: 13, fontWeight: 500 }}>
             {today.toLocaleDateString('sv-SE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}

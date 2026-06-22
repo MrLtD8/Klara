@@ -30,7 +30,7 @@ function Section({ title, children, action }) {
 }
 
 // ─── Inställningar ────────────────────────────────────────────────────────────
-export default function Installningar({ members, setMembers, focus, setFocus, onNavigate, showFocus, setShowFocus }) {
+export default function Installningar({ members, setMembers, focus, setFocus, onNavigate, showFocus, setShowFocus, familyName = '', setFamilyName }) {
   const [design, setDesign] = useLocalStorage('app_design', 'klara');
   const [gcalSettings, setGcalSettings] = useLocalStorage('kl_gcal', DEFAULT_GCAL);
   const gcalNorm = normalizeGcal(gcalSettings);
@@ -168,7 +168,7 @@ export default function Installningar({ members, setMembers, focus, setFocus, on
         <button onClick={addCal} style={{ ...saveBtnSm, width: '100%', padding: '10px' }}>+ Lägg till kalender</button>
       </Section>
 
-      {/* ── Familjemedlemmar ──────────────────────────────────── */}
+      {/* ── Familjenamn + medlemmar ─────────────────────────────── */}
       <Section
         title="👨‍👩‍👧‍👦 Familjemedlemmar"
         action={
@@ -180,6 +180,17 @@ export default function Installningar({ members, setMembers, focus, setFocus, on
           </button>
         }
       >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+          <label style={{ ...labelStyle, marginBottom: 0, whiteSpace: 'nowrap' }}>Familjenamn</label>
+          <input
+            value={familyName}
+            onChange={e => setFamilyName(e.target.value)}
+            placeholder="t.ex. Svenssons"
+            style={{ ...inputStyle, marginBottom: 0, flex: 1, maxWidth: 240 }}
+          />
+          <span style={{ fontSize: 12, color: T.textMuted }}>Visas i hälsningen på Hem</span>
+        </div>
+
         {addingMember && (
           <div style={{ background: T.bg, borderRadius: T.radiusSm, padding: 16, marginBottom: 14, border: `1px solid ${T.border}` }}>
             <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>

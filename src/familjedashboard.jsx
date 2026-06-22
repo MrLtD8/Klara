@@ -153,7 +153,7 @@ function DayCol({date,isToday,events,schoolLunch,dinner,T,onAddEvent,onEditMeal,
 
     {/* Events */}
     <div style={{flex:1,padding:"5px 6px 4px",overflowY:"auto",minHeight:50}}>
-      {events.filter(e=>e.type!=="holiday").map((ev)=><StickerCard key={ev.id} event={ev} T={T} onDelete={onDeleteEvent}/>)}
+      {events.filter(e=>e.type!=="holiday").map((ev)=><StickerCard key={ev.id} event={ev} T={T} onDelete={ev.gcal?null:onDeleteEvent}/>)}
       <button onClick={()=>onAddEvent(fmtDate(date))} style={{width:"100%",padding:"3px",borderRadius:5,border:`1px dashed ${T.calBorder}`,background:"transparent",color:T.textDim,fontSize:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:.7}}>+ händelse</button>
     </div>
 
@@ -172,7 +172,7 @@ function DayCol({date,isToday,events,schoolLunch,dinner,T,onAddEvent,onEditMeal,
   </div>;
 }
 
-function CalendarView({T,familyMeals,schoolMenu}){
+function CalendarView({T,familyMeals,schoolMenu,gcalEvents=[]}){
   const today=new Date(); today.setHours(0,0,0,0);
   const [weekStart,setWeekStart]=useState(getWeekStart(today));
   const [calMeals,setCalMeals]=useLocalStorage("fp_calmeals",{});
@@ -248,7 +248,8 @@ function CalendarView({T,familyMeals,schoolMenu}){
         const isToday=date.getTime()===today.getTime();
         const sl=calMeals[dk]?.lunch||getSchoolLunch(date,schoolMenu)||"";
         const dinner=calMeals[dk]?.dinner||getFamilyDinner(date,familyMeals,calMeals)||"";
-        return <DayCol key={dk} date={date} isToday={isToday} events={getEvWithRecur(dk)} schoolLunch={sl} dinner={dinner} T={T} onAddEvent={setAddEvDate} onEditMeal={openMealEdit} onDropEvent={dropEvent} onDeleteEvent={deleteEvent}/>;
+        const gcalForDay=gcalEvents.filter(e=>e.date===dk).map(e=>({id:'gcal_'+e.date+'_'+e.title,type:'note',title:'📆 '+e.title,who:e.calendarName||'',recur:'none',gcal:true}));
+        return <DayCol key={dk} date={date} isToday={isToday} events={[...getEvWithRecur(dk),...gcalForDay]} schoolLunch={sl} dinner={dinner} T={T} onAddEvent={setAddEvDate} onEditMeal={openMealEdit} onDropEvent={dropEvent} onDeleteEvent={deleteEvent}/>;
       })}
     </div>
 
@@ -442,7 +443,7 @@ function TaskForm({T,members,init,onSave,onCancel,showLane,showHideGuest,epics})
   </div>;
 }
 
-function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,setDragTask,setDragOver,members,onUpdateTask}){
+function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,setDragTask,setDragOver,members,onUpdateTask,onTouchDragStart}){
   const [exp,setExp]=useState(false);
   const [dragging,setDragging]=useState(false);
   const [newSub,setNewSub]=useState("");
@@ -459,6 +460,7 @@ function TaskCard({T,task,idx,lt,moveTask,moveUp,moveDown,setEditing,delTask,set
   return <div key={task.id} draggable
     onDragStart={()=>{setDragTask(task.id);setDragging(true);}}
     onDragEnd={()=>{setDragTask(null);setDragOver(null);setDragging(false);}}
+    onTouchStart={e=>onTouchDragStart&&onTouchDragStart(task.id,task.title,e)}
     style={{borderRadius:9,background:T.card,backdropFilter:T.blur,border:`1px solid ${T.border}`,boxShadow:T.shadow,overflow:"hidden",marginBottom:5,cursor:"grab",userSelect:"none",opacity:dragging?0.4:1,transition:"opacity .15s"}}>
     <div style={{display:"flex",gap:7,alignItems:"center",padding:"8px 9px"}}>
       <span style={{color:T.textDim,fontSize:12,flexShrink:0}}>⠿</span>
@@ -520,6 +522,55 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode,epics}){
   const filtered=tasks.filter(t=>{if(guestMode&&t.hideGuest)return false;if(filterMid==="all")return true;return t.mids.includes(filterMid);});
   const getLane=id=>filtered.filter(t=>t.lane===id).sort((a,b)=>(a.order??0)-(b.order??0));
 
+  // ── Touch drag-and-drop (iPad) ──
+  const touchRef=useRef({id:null,timer:null,startY:0,active:false});
+  const [touchDrag,setTouchDrag]=useState(null); // {id, x, y, title}
+  const [touchLane,setTouchLane]=useState(null);
+  const lanesRef=useRef(null);
+
+  const touchStart=(taskId,taskTitle,e)=>{
+    const t=e.touches[0];
+    touchRef.current={id:taskId,timer:null,startY:t.clientY,startX:t.clientX,active:false};
+    touchRef.current.timer=setTimeout(()=>{
+      touchRef.current.active=true;
+      setTouchDrag({id:taskId,x:t.clientX,y:t.clientY,title:taskTitle});
+      setDragTask(taskId);
+    },200);
+  };
+  const touchMove=(e)=>{
+    const tr=touchRef.current;
+    if(!tr.id)return;
+    const t=e.touches[0];
+    if(!tr.active){
+      if(Math.abs(t.clientY-tr.startY)>8||Math.abs(t.clientX-tr.startX)>8){
+        clearTimeout(tr.timer);tr.id=null;
+      }
+      return;
+    }
+    e.preventDefault();
+    setTouchDrag(d=>d?{...d,x:t.clientX,y:t.clientY}:d);
+    if(lanesRef.current){
+      const cols=lanesRef.current.children;
+      for(let i=0;i<cols.length;i++){
+        const r=cols[i].getBoundingClientRect();
+        if(t.clientX>=r.left&&t.clientX<=r.right){
+          setTouchLane(LANES[i]?.id||null);
+          setDragOver(LANES[i]?.id||null);
+          break;
+        }
+      }
+    }
+  };
+  const touchEnd=()=>{
+    const tr=touchRef.current;
+    clearTimeout(tr.timer);
+    if(tr.active&&tr.id&&touchLane){
+      moveTask(tr.id,touchLane);
+    }
+    touchRef.current={id:null,timer:null,startY:0,startX:0,active:false};
+    setTouchDrag(null);setTouchLane(null);setDragTask(null);setDragOver(null);
+  };
+
   return <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
     <div style={{padding:"9px 12px 7px",borderBottom:`1px solid ${T.border}`,display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",flexShrink:0}}>
       <div style={{display:"flex",gap:3,flex:1,overflowX:"auto",alignItems:"center"}}>
@@ -532,7 +583,7 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode,epics}){
       <button onClick={()=>setEditing("new")} style={{flexShrink:0,padding:"3px 11px",borderRadius:7,border:"none",background:T.amber,color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Ny uppgift</button>
     </div>
     {editing&&<div style={{padding:"0 10px 8px",flexShrink:0}}><TaskForm T={T} members={members} init={editing!=="new"?{...editing}:{...EMPTY_FORM}} onSave={saveTask} onCancel={()=>setEditing(null)} showLane showHideGuest epics={epics}/></div>}
-    <div style={{flex:1,overflow:"hidden",display:"flex"}}>
+    <div ref={lanesRef} style={{flex:1,overflow:"hidden",display:"flex"}} onTouchMove={touchMove} onTouchEnd={touchEnd} onTouchCancel={touchEnd}>
       {LANES.map((lane,li)=>{
         const lt=getLane(lane.id);
         return <div key={lane.id} style={{flex:1,display:"flex",flexDirection:"column",borderRight:li<LANES.length-1?`1px solid ${T.border}`:"none",overflow:"hidden"}} onDragOver={e=>{e.preventDefault();setDragOver(lane.id);}} onDrop={()=>{if(dragTask)moveTask(dragTask,lane.id);setDragTask(null);setDragOver(null);}}>
@@ -547,12 +598,13 @@ function KanbanBoard({T,tasks,setTasks,members,guestMode,epics}){
             {lt.length===0&&<div style={{textAlign:"center",padding:"16px 8px",color:T.textDim,fontSize:10,border:`1px dashed ${T.border}`,borderRadius:7,marginTop:3}}>Dra hit</div>}
             {lt.map((task,idx)=>{
               if(guestMode&&task.hideGuest)return null;
-              return <TaskCard key={task.id} T={T} task={task} idx={idx} lt={lt} moveTask={moveTask} moveUp={moveUp} moveDown={moveDown} setEditing={setEditing} delTask={delTask} setDragTask={setDragTask} setDragOver={setDragOver} members={members} onUpdateTask={updateTask}/>;
+              return <TaskCard key={task.id} T={T} task={task} idx={idx} lt={lt} moveTask={moveTask} moveUp={moveUp} moveDown={moveDown} setEditing={setEditing} delTask={delTask} setDragTask={setDragTask} setDragOver={setDragOver} members={members} onUpdateTask={updateTask} onTouchDragStart={touchStart}/>;
             })}
           </div>
         </div>;
       })}
     </div>
+    {touchDrag&&<div style={{position:"fixed",left:touchDrag.x-60,top:touchDrag.y-20,width:120,padding:"8px 10px",borderRadius:9,background:T.amber,color:"#fff",fontSize:11,fontWeight:700,boxShadow:"0 4px 20px rgba(0,0,0,0.3)",pointerEvents:"none",zIndex:9999,opacity:0.92,textAlign:"center",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{touchDrag.title}</div>}
   </div>;
 }
 
@@ -2538,7 +2590,7 @@ export default function App(){
             </div>
             {/* Calendar takes over right side */}
             <div style={{display:"flex",flexDirection:"column",overflow:"hidden",background:T.card,backdropFilter:T.blur,position:"relative",animation:"fadeIn .2s ease"}}>
-              <CalendarView T={T} familyMeals={familyMeals} schoolMenu={schoolMenu}/>
+              <CalendarView T={T} familyMeals={familyMeals} schoolMenu={schoolMenu} gcalEvents={gcal.connected ? gcal.events : []}/>
             </div>
           </div>
         ) : (

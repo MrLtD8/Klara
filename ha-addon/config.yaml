@@ -1,15 +1,22 @@
 name: "Familjeapp"
-description: "Familjeplanering - kalender och uppgifter"
-version: "1.6.0"
+description: "Familjeplanering - kalender, uppgifter och automationer"
+version: "1.7.0"
 slug: "familjeapp"
 init: false
 arch:
   - aarch64
 startup: application
 boot: auto
+homeassistant_api: true
 ports:
   "3000/tcp": 3000
 ports_description:
   "3000/tcp": "Webbgränssnitt"
 panel_icon: mdi:home-heart
 panel_title: Familjeapp
+options:
+  anthropic_api_key: ""
+  notify_service: "notify"
+schema:
+  anthropic_api_key: "str?"
+  notify_service: "str?"

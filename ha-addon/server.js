@@ -22,6 +22,29 @@ const PORT      = process.env.PORT       || 3000;
 const DATA_FILE = process.env.DATA_FILE  || '/data/familjeapp.json';
 const PUBLIC    = process.env.PUBLIC_DIR || path.join(__dirname, 'public');
 
+// ── Datahelpers ───────────────────────────────────────────────
+function readData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  } catch (e) { console.error('[familjeapp] Läsfel:', e.message); }
+  return {};
+}
+
+function writeData(data) {
+  const dir = path.dirname(DATA_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+// ── Addon-inställningar (HA skriver /data/options.json) ──────
+function loadOptions() {
+  try {
+    const p = path.join(path.dirname(DATA_FILE), 'options.json');
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch (e) { /* kör vidare med env-fallback */ }
+  return {};
+}
+
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 
@@ -218,6 +241,233 @@ app.get('/api/calendar', async (req, res) => {
     console.error('[familjeapp] Kalenderfel:', e.message);
     res.status(502).json({ error: 'Kunde inte hämta kalendern: ' + e.message });
   }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  Home Assistant-koppling
+//
+//  Addons med homeassistant_api: true får SUPERVISOR_TOKEN som env
+//  och når HA:s Core API via http://supervisor/core/api — ingen
+//  long-lived token behövs.
+// ══════════════════════════════════════════════════════════════
+const HA_API = process.env.HA_API_URL || 'http://supervisor/core/api';
+const HA_TOKEN = process.env.SUPERVISOR_TOKEN || '';
+
+async function haFetch(apiPath, opts = {}) {
+  if (!HA_TOKEN) throw new Error('Ingen SUPERVISOR_TOKEN — kör vi utanför HA?');
+  const res = await fetch(HA_API + apiPath, {
+    ...opts,
+    headers: { Authorization: `Bearer ${HA_TOKEN}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  });
+  if (!res.ok) throw new Error(`HA API ${res.status}`);
+  return res.json();
+}
+
+// Status: är HA-API:t nåbart?
+app.get('/api/ha/status', async (_req, res) => {
+  try {
+    const cfg = await haFetch('/config');
+    res.json({ available: true, version: cfg.version, location: cfg.location_name });
+  } catch (e) {
+    res.json({ available: false, reason: e.message });
+  }
+});
+
+// Lista entiteter (för att välja t.ex. dörrsensor i appen)
+app.get('/api/ha/states', async (req, res) => {
+  try {
+    const states = await haFetch('/states');
+    const q = (req.query.q || '').toLowerCase();
+    const list = states
+      .filter(s => !q || s.entity_id.toLowerCase().includes(q) || (s.attributes?.friendly_name || '').toLowerCase().includes(q))
+      .slice(0, 200)
+      .map(s => ({ entity_id: s.entity_id, state: s.state, name: s.attributes?.friendly_name || s.entity_id }));
+    res.json({ states: list });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  Regelmotor — utvärderar kl_automations från appen
+//
+//  Regelformat (skapas i Klara → Automationer):
+//    { id, name, trigger, triggerTime, condition, action, message, enabled }
+//  Konfig:  data.kl_automation_config = { doorEntity: 'binary_sensor.xxx' }
+//  Notiser: data.kl_notifications     = [{ id, time, ruleName, message, read }]
+// ══════════════════════════════════════════════════════════════
+const engineState = { firedToday: {}, lastFireDate: '', doorState: null, lastDoorFire: {} };
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function checkCondition(cond, data) {
+  const today = todayStr();
+  const day = new Date().getDay();
+  switch (cond) {
+    case 'med_not_given': {
+      const meds = data.kl_medicin || [];
+      return meds.some(m => !m.lastGiven || m.lastGiven.slice(0, 10) !== today);
+    }
+    case 'task_not_done': return (data.kl_tasks || []).some(t => t.lane !== 'done');
+    case 'no_cal_today':  return !(data.kl_events || []).some(e => e.date === today);
+    case 'weekday':       return day >= 1 && day <= 5;
+    case 'weekend':       return day === 0 || day === 6;
+    default:              return true; // 'none'
+  }
+}
+
+function pushNotification(data, rule) {
+  data.kl_notifications = [
+    { id: 'n_' + Date.now(), time: new Date().toISOString(), ruleName: rule.name, message: rule.message || rule.name, read: false },
+    ...(data.kl_notifications || []),
+  ].slice(0, 50);
+}
+
+async function fireAction(rule, data) {
+  pushNotification(data, rule); // alla åtgärder loggas i appen
+  if (rule.action === 'notify_push' || rule.action === 'sound') {
+    const service = loadOptions().notify_service || 'notify';
+    try {
+      await haFetch(`/services/notify/${service}`, {
+        method: 'POST',
+        body: JSON.stringify({ title: '⚡ ' + rule.name, message: rule.message || rule.name }),
+      });
+    } catch (e) {
+      console.error('[automation] Push-notis misslyckades:', e.message);
+    }
+  }
+  console.log(`[automation] "${rule.name}" triggad (${rule.action})`);
+}
+
+async function engineTick() {
+  const data = readData();
+  const rules = (data.kl_automations || []).filter(r => r.enabled);
+  if (!rules.length) return;
+
+  const now = new Date();
+  const today = todayStr();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  // Nollställ dagsräknaren vid midnatt
+  if (engineState.lastFireDate !== today) {
+    engineState.firedToday = {};
+    engineState.lastFireDate = today;
+  }
+
+  // Dörrsensor: läs av en gång per tick om någon regel behöver den
+  const doorEntity = data.kl_automation_config?.doorEntity;
+  let doorOpened = false;
+  if (doorEntity && rules.some(r => r.trigger === 'door')) {
+    try {
+      const st = await haFetch(`/states/${doorEntity}`);
+      if (engineState.doorState === 'off' && st.state === 'on') doorOpened = true;
+      engineState.doorState = st.state;
+    } catch (e) { /* sensor onåbar — hoppa över denna tick */ }
+  }
+
+  let changed = false;
+  for (const rule of rules) {
+    let shouldFire = false;
+
+    if (['time', 'morning', 'evening'].includes(rule.trigger)) {
+      // Tidsbaserad: en gång per dag, inom 5 min efter angiven tid
+      if (!engineState.firedToday[rule.id] && rule.triggerTime) {
+        const [h, m] = rule.triggerTime.split(':').map(Number);
+        const target = h * 60 + m;
+        if (nowMin >= target && nowMin <= target + 5) shouldFire = true;
+      }
+    } else if (rule.trigger === 'door' && doorOpened) {
+      // Dörr: max en gång per kvart per regel (debounce)
+      const last = engineState.lastDoorFire[rule.id] || 0;
+      if (Date.now() - last > 15 * 60 * 1000) {
+        shouldFire = true;
+        engineState.lastDoorFire[rule.id] = Date.now();
+      }
+    } else if (rule.trigger === 'cal_soon') {
+      // Händelse idag: en gång per dag
+      if (!engineState.firedToday[rule.id] && (data.kl_events || []).some(e => e.date === today)) shouldFire = true;
+    }
+
+    if (shouldFire && checkCondition(rule.condition, data)) {
+      engineState.firedToday[rule.id] = true;
+      await fireAction(rule, data);
+      changed = true;
+    } else if (shouldFire) {
+      engineState.firedToday[rule.id] = true; // villkoret stoppade — prova inte igen idag
+    }
+  }
+  if (changed) writeData(data);
+}
+
+setInterval(() => engineTick().catch(e => console.error('[automation] Tick-fel:', e.message)), 30 * 1000);
+
+// ══════════════════════════════════════════════════════════════
+//  AI-dagsrapport — Claude analyserar dagens läge
+//
+//  API-nyckel: addon-option anthropic_api_key, env ANTHROPIC_API_KEY
+//  eller kl_claude_key i datafilen. Bara text skickas — inga namn
+//  på tjänster utanför nätverket behöver mer än prompten.
+// ══════════════════════════════════════════════════════════════
+function getClaudeKey() {
+  return loadOptions().anthropic_api_key || process.env.ANTHROPIC_API_KEY || readData().kl_claude_key || '';
+}
+
+app.post('/api/assistent/rapport', async (_req, res) => {
+  const key = getClaudeKey();
+  if (!key) return res.status(400).json({ error: 'Ingen Claude API-nyckel konfigurerad (addon-option anthropic_api_key).' });
+
+  const data = readData();
+  const today = todayStr();
+  const dayName = new Date().toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const eventsToday = (data.kl_events || []).filter(e => e.date === today).map(e => e.title);
+  const tasksOpen   = (data.kl_tasks  || []).filter(t => t.lane !== 'done').map(t => `${t.title} (${t.lane === 'progress' ? 'pågår' : 'att göra'}${t.prio === 'high' ? ', hög prio' : ''})`);
+  const medsPending = (data.kl_medicin || []).filter(m => !m.lastGiven || m.lastGiven.slice(0, 10) !== today).map(m => m.name);
+
+  const prompt = `Du är familjens assistent. Idag är det ${dayName}.
+
+Händelser idag: ${eventsToday.length ? eventsToday.join(', ') : 'inga'}
+Öppna uppgifter: ${tasksOpen.length ? tasksOpen.join('; ') : 'inga'}
+Mediciner ej givna idag: ${medsPending.length ? medsPending.join(', ') : 'alla givna'}
+
+Skriv en kort dagsrapport på svenska (max 4 meningar) och föreslå max 3 nya konkreta uppgifter om något verkar saknas. Svara med ENDAST giltig JSON:
+{"sammanfattning": "...", "forslag": ["...", "..."]}`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!resp.ok) throw new Error(`Claude API ${resp.status}`);
+    const out = await resp.json();
+    const text = out.content?.[0]?.text || '{}';
+    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+
+    const insight = {
+      id: 'ins_' + Date.now(),
+      time: new Date().toISOString(),
+      summary: parsed.sammanfattning || text,
+      suggestions: Array.isArray(parsed.forslag) ? parsed.forslag : [],
+    };
+    data.kl_insights = [insight, ...(data.kl_insights || [])].slice(0, 20);
+    writeData(data);
+    res.json(insight);
+  } catch (e) {
+    console.error('[assistent] Rapportfel:', e.message);
+    res.status(502).json({ error: 'AI-rapporten misslyckades: ' + e.message });
+  }
+});
+
+app.get('/api/insights', (_req, res) => {
+  res.json({ insights: readData().kl_insights || [] });
 });
 
 // ── Statiska filer (React-bygget) ─────────────────────────────

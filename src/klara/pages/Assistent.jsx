@@ -4,7 +4,7 @@ import { useLocalStorage } from '../../useLocalStorage';
 
 export default function Assistent({ members = [] }) {
   const [calEvents] = useLocalStorage('kl_cal_events', []);
-  const [tasks] = useLocalStorage('kl_tasks', []);
+  const [tasks, setTasks] = useLocalStorage('kl_tasks', []);
   const [medicins] = useLocalStorage('kl_medicin', []);
   const [carItems] = useLocalStorage('kl_car', []);
   const [houseItems] = useLocalStorage('kl_house', []);
@@ -13,6 +13,34 @@ export default function Assistent({ members = [] }) {
   const [emailText, setEmailText] = useState('');
   const [summary, setSummary] = useState('');
   const [summarizing, setSummarizing] = useState(false);
+  const [serverReport, setServerReport] = useState(null);
+  const [serverLoading, setServerLoading] = useState(false);
+  const [serverError, setServerError] = useState('');
+  const [addedSuggestions, setAddedSuggestions] = useState([]);
+
+  // AI-dagsrapport från HA-addonet — nyckeln ligger på servern, inte i webbläsaren
+  async function fetchServerReport() {
+    setServerLoading(true);
+    setServerError('');
+    try {
+      const res = await fetch('/api/assistent/rapport', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setServerReport(data);
+      setAddedSuggestions([]);
+    } catch (err) {
+      setServerError(err.message);
+    }
+    setServerLoading(false);
+  }
+
+  function addSuggestionAsTask(title) {
+    setTasks(prev => [...prev, {
+      id: 't_' + Date.now(), title, lane: 'ready', mids: [], tags: ['AI-förslag'],
+      prio: 'med', estimate: '', deadline: '', subtasks: [], epic: '',
+    }]);
+    setAddedSuggestions(prev => [...prev, title]);
+  }
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -109,6 +137,52 @@ export default function Assistent({ members = [] }) {
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: T.text }}>🤖 FamiljeAssistenten</h1>
         <p style={{ margin: '4px 0 0', color: T.textMuted, fontSize: 14 }}>Din personliga dagrapport och AI-hjälp</p>
+      </div>
+
+      {/* ── AI-dagsrapport från servern ─────────────────────── */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 24, boxShadow: T.shadow, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 22 }}>🔮</span>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.text }}>AI-dagsrapport</h2>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: T.textMuted }}>Servern analyserar dagens kalender, uppgifter och mediciner med Claude</p>
+          </div>
+          <button onClick={fetchServerReport} disabled={serverLoading}
+            style={{ padding: '9px 20px', borderRadius: T.radiusSm, border: 'none', background: T.purple, color: '#fff', fontSize: 14, fontWeight: 700, cursor: serverLoading ? 'wait' : 'pointer', opacity: serverLoading ? 0.7 : 1 }}>
+            {serverLoading ? 'Analyserar…' : 'Generera'}
+          </button>
+        </div>
+
+        {serverError && (
+          <div style={{ padding: '10px 14px', borderRadius: T.radiusSm, background: '#FEE2E2', color: '#B91C1C', fontSize: 13 }}>
+            {serverError}
+          </div>
+        )}
+
+        {serverReport && (
+          <div>
+            <p style={{ margin: '0 0 14px', fontSize: 14, color: T.text, lineHeight: 1.6 }}>{serverReport.summary}</p>
+            {serverReport.suggestions?.length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Föreslagna uppgifter</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {serverReport.suggestions.map((s, i) => {
+                    const added = addedSuggestions.includes(s);
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: T.radiusSm, background: T.bg, border: `1px solid ${T.border}` }}>
+                        <span style={{ flex: 1, fontSize: 13, color: T.text }}>{s}</span>
+                        <button onClick={() => !added && addSuggestionAsTask(s)} disabled={added}
+                          style={{ padding: '5px 14px', borderRadius: T.radiusSm, border: 'none', background: added ? T.bg : T.purpleLight, color: added ? T.textMuted : T.purple, fontSize: 12, fontWeight: 700, cursor: added ? 'default' : 'pointer' }}>
+                          {added ? 'Tillagd ✓' : '+ Lägg på tavlan'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>

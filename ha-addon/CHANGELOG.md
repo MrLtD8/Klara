@@ -1,5 +1,25 @@
 # Ändringslogg — Familjeapp
 
+## 1.7.0 (2026-06-20)
+
+### Automationer — nu med riktig backend
+- **Regelmotor i addonet**: reglerna från Automationer-sidan utvärderas var 30:e sekund på servern.
+- **Home Assistant-koppling** (`homeassistant_api: true`): addonet pratar med HA:s API utan token-konfiguration.
+- **Dörrsensor-trigger**: välj valfri `binary_sensor` i Automationer-sidan — "Ytterdörren öppnas" triggar på riktigt.
+- **Push-notiser via HA**: åtgärden "Push-notis" anropar HA:s notify-tjänst (väljbar i addon-inställningarna).
+- **Händelselogg** i appen visar alla triggade regler.
+
+### AI-dagsrapport (server-side)
+- Ny knapp i Assistent: servern bygger en prompt av dagens kalender, öppna uppgifter och medicinstatus och låter Claude skriva en dagsrapport.
+- **AI-förslag → tavlan**: föreslagna uppgifter kan läggas på Kanban-tavlan med ett klick (taggas "AI-förslag").
+- API-nyckeln anges i addonets konfiguration (`anthropic_api_key`) — den lagras på HA-enheten, inte i webbläsaren.
+
+### Addon-inställningar (nya)
+- `anthropic_api_key` — Claude API-nyckel för dagsrapporten
+- `notify_service` — HA notify-tjänst för push (standard: `notify`)
+
+---
+
 ## 1.6.0 (2026-06-22)
 
 ### Onboarding (Klara)

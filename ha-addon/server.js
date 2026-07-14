@@ -415,10 +415,32 @@ function getClaudeKey() {
   return loadOptions().anthropic_api_key || process.env.ANTHROPIC_API_KEY || readData().kl_claude_key || '';
 }
 
-app.post('/api/assistent/rapport', async (_req, res) => {
-  const key = getClaudeKey();
-  if (!key) return res.status(400).json({ error: 'Ingen Claude API-nyckel konfigurerad (addon-option anthropic_api_key).' });
+const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 
+/** Gemensamt Claude-anrop. Kastar Error om nyckel saknas eller API:t felar. */
+async function callClaude(prompt, maxTokens = 500) {
+  const key = getClaudeKey();
+  if (!key) throw new Error('Ingen Claude API-nyckel konfigurerad (addon-option anthropic_api_key).');
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!resp.ok) throw new Error(`Claude API ${resp.status}`);
+  const out = await resp.json();
+  return out.content?.[0]?.text || '';
+}
+
+/** Plockar ut första JSON-objektet ur ett Claude-svar (som ibland pratar runt). */
+function parseClaudeJson(text) {
+  return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+}
+
+app.post('/api/assistent/rapport', async (_req, res) => {
   const data = readData();
   const today = todayStr();
   const dayName = new Date().toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -437,19 +459,8 @@ Skriv en kort dagsrapport på svenska (max 4 meningar) och föreslå max 3 nya k
 {"sammanfattning": "...", "forslag": ["...", "..."]}`;
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-    if (!resp.ok) throw new Error(`Claude API ${resp.status}`);
-    const out = await resp.json();
-    const text = out.content?.[0]?.text || '{}';
-    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+    const text = await callClaude(prompt, 500);
+    const parsed = parseClaudeJson(text);
 
     const insight = {
       id: 'ins_' + Date.now(),
@@ -472,30 +483,140 @@ app.get('/api/insights', (_req, res) => {
 
 // Fri text (mail, artikel, anteckningar) → kort sammanfattning på svenska
 app.post('/api/assistent/sammanfatta', async (req, res) => {
-  const key = getClaudeKey();
-  if (!key) return res.status(400).json({ error: 'Ingen Claude API-nyckel konfigurerad (addon-option anthropic_api_key).' });
-
   const text = (req.body?.text || '').trim();
   if (!text) return res.status(400).json({ error: 'Ingen text att sammanfatta.' });
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: `Sammanfatta denna text kortfattat på svenska (max 3 meningar):\n\n${text}` }],
-      }),
-    });
-    if (!resp.ok) throw new Error(`Claude API ${resp.status}`);
-    const out = await resp.json();
-    res.json({ summary: out.content?.[0]?.text || '' });
+    const summary = await callClaude(`Sammanfatta denna text kortfattat på svenska (max 3 meningar):\n\n${text}`, 300);
+    res.json({ summary });
   } catch (e) {
     console.error('[assistent] Sammanfattningsfel:', e.message);
     res.status(502).json({ error: 'Sammanfattningen misslyckades: ' + e.message });
   }
 });
+
+// ══════════════════════════════════════════════════════════════
+//  Mail-digest — IMAP-inläsning + AI-triage
+//
+//  Konton anges i addon-optionen mail_accounts:
+//    - name: "Björn"
+//      user: "namn@gmail.com"
+//      password: "app-lösenord"      (Gmail: kräver 2FA, skapas på
+//      host: "imap.gmail.com"         myaccount.google.com/apppasswords)
+//
+//  Servern hämtar de senaste mailen, låter Claude sortera ut det
+//  viktiga och sparar resultatet i kl_mail_digest. Lösenorden lämnar
+//  aldrig HA-enheten — bara avsändare/ämne/utdrag skickas till Claude.
+// ══════════════════════════════════════════════════════════════
+function getMailAccounts() {
+  const accs = loadOptions().mail_accounts;
+  return Array.isArray(accs) ? accs.filter(a => a.user && a.password) : [];
+}
+
+async function fetchRecentMail(account, maxCount = 15) {
+  // imapflow finns i Docker-imagen (och i projektets node_modules lokalt);
+  // lazy-require så servern startar även om paketet saknas.
+  const { ImapFlow } = require('imapflow');
+  const client = new ImapFlow({
+    host: account.host || 'imap.gmail.com',
+    port: 993,
+    secure: true,
+    auth: { user: account.user, pass: account.password },
+    logger: false,
+  });
+
+  const messages = [];
+  await client.connect();
+  try {
+    await client.mailboxOpen('INBOX', { readOnly: true });
+    // De senaste N mailen, nyast först
+    const total = client.mailbox.exists;
+    if (total === 0) return [];
+    const from = Math.max(1, total - maxCount + 1);
+    for await (const msg of client.fetch(`${from}:*`, { envelope: true, bodyParts: ['1'] })) {
+      const snippetRaw = msg.bodyParts?.get('1')?.toString('utf8') || '';
+      messages.push({
+        uid: msg.uid,
+        account: account.name || account.user,
+        from: msg.envelope?.from?.[0]?.name || msg.envelope?.from?.[0]?.address || '?',
+        fromAddr: msg.envelope?.from?.[0]?.address || '',
+        subject: msg.envelope?.subject || '(inget ämne)',
+        date: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : null,
+        snippet: snippetRaw.replace(/\s+/g, ' ').slice(0, 400),
+      });
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
+  return messages.reverse(); // nyast först
+}
+
+async function runMailDigest() {
+  const accounts = getMailAccounts();
+  if (!accounts.length) throw new Error('Inga mailkonton konfigurerade (addon-option mail_accounts).');
+
+  const all = [];
+  for (const acc of accounts) {
+    try {
+      all.push(...await fetchRecentMail(acc));
+    } catch (e) {
+      console.error(`[mail] Kunde inte hämta ${acc.user}:`, e.message);
+    }
+  }
+  if (!all.length) throw new Error('Inga mail kunde hämtas — kontrollera konton och app-lösenord.');
+
+  const mailList = all.map((m, i) =>
+    `${i}. [${m.account}] Från: ${m.from} <${m.fromAddr}> | Ämne: ${m.subject} | ${m.snippet.slice(0, 200)}`
+  ).join('\n');
+
+  const prompt = `Du hjälper en barnfamilj att sortera sin mail. Här är de senaste mailen:
+
+${mailList}
+
+Välj ut de VIKTIGASTE (max 6) — sådant som kräver handling eller är relevant för familjen: räkningar, skola/förskola, vård, myndigheter, bokningar, deadlines. Ignorera nyhetsbrev, reklam och kvitton på småköp.
+
+Svara med ENDAST giltig JSON:
+{"viktiga": [{"index": 0, "sammanfattning": "en mening om vad mailet gäller", "atgard": "kort åtgärd eller tom sträng"}]}`;
+
+  const text = await callClaude(prompt, 800);
+  const parsed = parseClaudeJson(text);
+  const picked = (parsed.viktiga || []).filter(v => all[v.index]).map(v => ({
+    id: `mail_${all[v.index].account}_${all[v.index].uid}`,
+    account: all[v.index].account,
+    from: all[v.index].from,
+    subject: all[v.index].subject,
+    date: all[v.index].date,
+    summary: v.sammanfattning || '',
+    action: v.atgard || '',
+  }));
+
+  const digest = { time: new Date().toISOString(), scanned: all.length, items: picked };
+  const data = readData();
+  data.kl_mail_digest = digest;
+  writeData(data);
+  console.log(`[mail] Digest klar: ${picked.length} viktiga av ${all.length} skannade`);
+  return digest;
+}
+
+app.post('/api/mail/check', async (_req, res) => {
+  try {
+    res.json(await runMailDigest());
+  } catch (e) {
+    console.error('[mail] Digest-fel:', e.message);
+    res.status(502).json({ error: e.message });
+  }
+});
+
+app.get('/api/mail/digest', (_req, res) => {
+  res.json(readData().kl_mail_digest || { time: null, items: [] });
+});
+
+// Automatisk mailkoll var 30:e minut (bara om konton finns konfigurerade)
+setInterval(() => {
+  if (getMailAccounts().length) {
+    runMailDigest().catch(e => console.error('[mail] Periodisk koll misslyckades:', e.message));
+  }
+}, 30 * 60 * 1000);
 
 // ── Statiska filer (React-bygget) ─────────────────────────────
 app.use(express.static(PUBLIC));

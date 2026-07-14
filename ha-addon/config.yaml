@@ -1,6 +1,6 @@
 name: "Familjeapp"
 description: "Familjeplanering - kalender, uppgifter och automationer"
-version: "1.7.0"
+version: "1.8.0"
 slug: "familjeapp"
 init: false
 arch:
@@ -17,6 +17,12 @@ panel_title: Familjeapp
 options:
   anthropic_api_key: ""
   notify_service: "notify"
+  mail_accounts: []
 schema:
   anthropic_api_key: "str?"
   notify_service: "str?"
+  mail_accounts:
+    - name: "str?"
+      user: "str"
+      password: "password"
+      host: "str?"

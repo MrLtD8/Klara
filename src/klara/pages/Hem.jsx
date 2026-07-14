@@ -6,7 +6,7 @@ import { DEFAULT_GCAL, activeCalendars } from '../../gcal';
 import {
   Calendar, CheckSquare, Users, Bell, Pill, Wallet, Settings2,
   Wrench, Eye, EyeOff, Plus, Minus, GripVertical,
-  ArrowRight, ChevronLeft, ChevronRight, ShoppingCart,
+  ArrowRight, ChevronLeft, ChevronRight, ShoppingCart, Mail,
 } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -136,6 +136,7 @@ const WIDGET_META = {
   bilhus:    { Icon: Wrench,       color: '#6B7280' },
   medicin:   { Icon: Pill,         color: '#EC4899' },
   ekonomi:   { Icon: Wallet,       color: '#10B981' },
+  mail:      { Icon: Mail,         color: '#F59E0B' },
 };
 
 // ─── Default widget config (cols = 1-4 in a 4-col grid) ──────────────────────
@@ -147,6 +148,7 @@ const DEFAULT_WIDGETS = [
   { id: 'bilhus',    label: 'Bil & Hus',               visible: true, cols: 1 },
   { id: 'medicin',   label: 'Medicin',                 visible: true, cols: 1 },
   { id: 'ekonomi',   label: 'Kommande betalningar',    visible: true, cols: 2 },
+  { id: 'mail',      label: 'Viktiga mail',            visible: true, cols: 2 },
 ];
 
 // ─── Kanban Widget (drag-and-drop + single-lane mode) ─────────────────────────
@@ -530,6 +532,41 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
   const [widgets, setWidgets] = useLocalStorage('kl_hem_widgets', DEFAULT_WIDGETS);
   const [editMode, setEditMode] = useState(false);
 
+  // Nya default-widgets ska dyka upp även för användare med sparad layout
+  useEffect(() => {
+    const missing = DEFAULT_WIDGETS.filter(d => !widgets.some(w => w.id === d.id));
+    if (missing.length) setWidgets(prev => [...prev, ...missing.filter(d => !prev.some(w => w.id === d.id))]);
+  }, [widgets]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mail-digest från servern (AI-sorterade viktiga mail)
+  const [mailDigest, setMailDigest] = useState(null);
+  const [mailChecking, setMailChecking] = useState(false);
+  const [mailError, setMailError] = useState('');
+
+  const loadMailDigest = () => {
+    fetch('/api/mail/digest').then(r => r.json()).then(setMailDigest).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadMailDigest();
+    const iv = setInterval(loadMailDigest, 5 * 60 * 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  async function checkMailNow() {
+    setMailChecking(true);
+    setMailError('');
+    try {
+      const res = await fetch('/api/mail/check', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setMailDigest(data);
+    } catch (e) {
+      setMailError(e.message);
+    }
+    setMailChecking(false);
+  }
+
   const today    = new Date();
   const todayIso = isoDate(today);
   const weekDays = getWeekDays();
@@ -794,6 +831,66 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
               </p>
               <div style={{ marginTop: 12, fontSize: 13, color: T.purple, fontWeight: 500 }}>🌸 Ha en fin vecka!</div>
             </div>
+          </div>
+        );
+
+        // ── Viktiga mail (AI-sorterade från servern) ──────────────────────────
+        case 'mail': return (
+          <div
+            key={w.id}
+            onDragOver={editMode ? e => onWidgetDragOver(e, w.id) : undefined}
+            onDrop={editMode ? e => onWidgetDrop(e, w.id) : undefined}
+            style={{
+              gridColumn: `span ${colSpan}`,
+              opacity: dragId === w.id ? 0.4 : 1,
+              outline: (overId === w.id && dragId && dragId !== w.id) ? `2px dashed ${T.purple}` : 'none',
+              outlineOffset: 3, borderRadius: T.radiusLg, transition: 'opacity 0.15s',
+            }}
+          >
+            <Widget title="Viktiga mail" {...wProps(w)}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 11, color: T.textMuted }}>
+                  {mailDigest?.time
+                    ? `Uppdaterad ${new Date(mailDigest.time).toLocaleString('sv-SE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${mailDigest.scanned || 0} skannade`
+                    : 'Ingen skanning gjord ännu'}
+                </span>
+                <button onClick={checkMailNow} disabled={mailChecking}
+                  style={{ padding: '4px 12px', borderRadius: T.radiusSm, border: `1px solid ${T.border}`, background: 'transparent', color: T.purple, fontSize: 11, fontWeight: 600, cursor: mailChecking ? 'wait' : 'pointer' }}>
+                  {mailChecking ? 'Hämtar…' : 'Uppdatera'}
+                </button>
+              </div>
+              {mailError && (
+                <div style={{ padding: '8px 12px', borderRadius: T.radiusSm, background: '#FEE2E2', color: '#B91C1C', fontSize: 12, marginBottom: 8 }}>{mailError}</div>
+              )}
+              {(!mailDigest?.items || mailDigest.items.length === 0) && !mailError ? (
+                <p style={{ margin: 0, fontSize: 13, color: T.textMuted, fontStyle: 'italic' }}>
+                  Inga viktiga mail just nu. Mailkonton ställs in i addonets konfiguration (mail_accounts).
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(mailDigest?.items || []).map(m => (
+                    <div key={m.id} style={{ padding: '10px 12px', borderRadius: T.radiusSm, background: T.bg, border: `1px solid ${T.border}` }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: T.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.subject}</span>
+                        <span style={{ fontSize: 10, color: T.textMuted, flexShrink: 0 }}>
+                          {m.date ? new Date(m.date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }) : ''}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textMuted, marginBottom: m.summary ? 4 : 0 }}>
+                        {m.from}
+                        <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 999, background: T.purpleLight, color: T.purple, fontSize: 9, fontWeight: 700 }}>{m.account}</span>
+                      </div>
+                      {m.summary && <div style={{ fontSize: 12, color: T.text, lineHeight: 1.4 }}>{m.summary}</div>}
+                      {m.action && (
+                        <div style={{ marginTop: 5, fontSize: 11, fontWeight: 600, color: '#B45309', background: '#FEF3C7', borderRadius: T.radiusSm, padding: '3px 8px', display: 'inline-block' }}>
+                          → {m.action}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Widget>
           </div>
         );
 

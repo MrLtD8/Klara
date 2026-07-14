@@ -1,5 +1,20 @@
 # Ändringslogg — Familjeapp
 
+## 1.8.0 (2026-07-14)
+
+### Viktiga mail på dashboarden
+- **Ny widget på Hem**: "Viktiga mail" — servern hämtar era senaste mail via IMAP och låter Claude sortera ut det som kräver handling (räkningar, skola, vård, bokningar). Nyhetsbrev och reklam filtreras bort.
+- Varje mail visas med ämne, avsändare, en AI-sammanfattning och en föreslagen åtgärd.
+- Automatisk skanning var 30:e minut + "Uppdatera"-knapp i widgeten.
+- **Mailkonton** ställs in i addonets konfiguration (`mail_accounts`) med Gmail app-lösenord — lösenorden lagras bara på HA-enheten. Endast avsändare/ämne/kort utdrag skickas till Claude.
+
+### Tekniskt
+- Ny addon-option `mail_accounts` (lista: name, user, password, host)
+- Gemensam `callClaude()`-hjälpare — dagsrapport, sammanfattning och mail-triage delar samma kod
+- `imapflow` tillagd i Docker-imagen — **Rebuild krävs** för denna version
+
+---
+
 ## 1.7.0 (2026-06-20)
 
 ### Automationer — nu med riktig backend

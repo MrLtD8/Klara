@@ -8,7 +8,6 @@ export default function Assistent({ members = [] }) {
   const [medicins] = useLocalStorage('kl_medicin', []);
   const [carItems] = useLocalStorage('kl_car', []);
   const [houseItems] = useLocalStorage('kl_house', []);
-  const [aiKey, setAiKey] = useLocalStorage('kl_ai_key', '');
   const [report, setReport] = useState(null);
   const [emailText, setEmailText] = useState('');
   const [summary, setSummary] = useState('');
@@ -101,33 +100,18 @@ export default function Assistent({ members = [] }) {
 
   async function summarizeEmail() {
     if (!emailText.trim()) return;
-    if (!aiKey.trim()) {
-      setSummary('API-nyckel saknas. Ange din Claude API-nyckel nedan för att använda AI-sammanfattning.');
-      return;
-    }
     setSummarizing(true);
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/assistent/sammanfatta', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': aiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-3-haiku-20240307',
-          max_tokens: 300,
-          messages: [{ role: 'user', content: `Sammanfatta denna text kortfattat på svenska (max 3 meningar):\n\n${emailText}` }],
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: emailText }),
       });
       const data = await res.json();
-      if (data.content && data.content[0]) {
-        setSummary(data.content[0].text);
-      } else {
-        setSummary('Kunde inte sammanfatta. Kontrollera API-nyckeln.');
-      }
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setSummary(data.summary || '');
     } catch (err) {
-      setSummary('Fel vid anrop till Claude API: ' + err.message);
+      setSummary('Fel: ' + err.message);
     }
     setSummarizing(false);
   }
@@ -292,27 +276,6 @@ export default function Assistent({ members = [] }) {
                 <div style={{ fontSize: 14, color: T.text, lineHeight: 1.6 }}>{summary}</div>
               </div>
             )}
-          </div>
-
-          {/* API Key */}
-          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 24, boxShadow: T.shadow }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 15, color: T.text }}>🔑 Claude API-nyckel</h3>
-            <p style={{ fontSize: 12, color: T.textMuted, marginBottom: 12 }}>
-              Krävs för AI-sammanfattning. Lagras bara lokalt i din webbläsare.
-            </p>
-            <input
-              type="password"
-              value={aiKey}
-              onChange={e => setAiKey(e.target.value)}
-              placeholder="sk-ant-..."
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                border: `1px solid ${T.border}`, borderRadius: T.radiusSm,
-                padding: '9px 12px', fontSize: 14, color: T.text,
-                background: T.bg, outline: 'none',
-              }}
-            />
-            {aiKey && <div style={{ fontSize: 12, color: T.green, marginTop: 8 }}>✓ API-nyckel sparad</div>}
           </div>
         </div>
       </div>

@@ -470,6 +470,33 @@ app.get('/api/insights', (_req, res) => {
   res.json({ insights: readData().kl_insights || [] });
 });
 
+// Fri text (mail, artikel, anteckningar) → kort sammanfattning på svenska
+app.post('/api/assistent/sammanfatta', async (req, res) => {
+  const key = getClaudeKey();
+  if (!key) return res.status(400).json({ error: 'Ingen Claude API-nyckel konfigurerad (addon-option anthropic_api_key).' });
+
+  const text = (req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ error: 'Ingen text att sammanfatta.' });
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: `Sammanfatta denna text kortfattat på svenska (max 3 meningar):\n\n${text}` }],
+      }),
+    });
+    if (!resp.ok) throw new Error(`Claude API ${resp.status}`);
+    const out = await resp.json();
+    res.json({ summary: out.content?.[0]?.text || '' });
+  } catch (e) {
+    console.error('[assistent] Sammanfattningsfel:', e.message);
+    res.status(502).json({ error: 'Sammanfattningen misslyckades: ' + e.message });
+  }
+});
+
 // ── Statiska filer (React-bygget) ─────────────────────────────
 app.use(express.static(PUBLIC));
 

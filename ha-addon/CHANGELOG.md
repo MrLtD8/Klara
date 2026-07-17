@@ -1,5 +1,15 @@
 # Ändringslogg — Familjeapp
 
+## 1.9.0 (2026-07-17)
+
+### Lokal AI via Ollama
+- **AI-växel**: sätt addon-optionen `ollama_url` (t.ex. `http://192.168.50.244:11434`) så körs all AI — dagsrapport, sammanfattning och mail-triage — mot din lokala Ollama istället för Claude API. Ingen data lämnar hemmet och det kostar ingenting.
+- `ollama_model` väljer modell (standard `llama3.2:3b`). Lämna `ollama_url` tom för att använda Claude API som tidigare.
+- JSON-svar tvingas via Ollamas `format: json` — strukturerade svar även från små modeller.
+- Ny endpoint `/api/ai/status` visar aktiv AI-leverantör och om den är nåbar.
+
+---
+
 ## 1.8.0 (2026-07-14)
 
 ### Viktiga mail på dashboarden

@@ -439,8 +439,60 @@ async function callClaude(prompt, maxTokens = 500) {
   return out.content?.[0]?.text || '';
 }
 
-/** Plockar ut första JSON-objektet ur ett Claude-svar (som ibland pratar runt). */
-function parseClaudeJson(text) {
+/** Lokalt Ollama-anrop — kräver addon-option ollama_url (t.ex. http://192.168.50.244:11434). */
+async function callOllama(prompt, { maxTokens = 500, json = false } = {}) {
+  const opts = loadOptions();
+  const url = (opts.ollama_url || '').replace(/\/+$/, '');
+  const model = opts.ollama_model || 'llama3.2:3b';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 180 * 1000); // små modeller kan vara långsamma
+  try {
+    const resp = await fetch(`${url}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model, prompt, stream: false,
+        ...(json ? { format: 'json' } : {}),
+        options: { num_predict: maxTokens },
+      }),
+      signal: ctrl.signal,
+    });
+    if (!resp.ok) throw new Error(`Ollama ${resp.status}: ${(await resp.text().catch(() => '')).slice(0, 200)}`);
+    const out = await resp.json();
+    return out.response || '';
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error(`Ollama-anropet tog för lång tid (>${180}s) — är datorn med Ollama igång?`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** AI-växel: Ollama om ollama_url är satt, annars Claude API. */
+async function callAI(prompt, { maxTokens = 500, json = false } = {}) {
+  if (loadOptions().ollama_url) return callOllama(prompt, { maxTokens, json });
+  return callClaude(prompt, maxTokens);
+}
+
+// Vilken AI kör vi, och svarar den? (för felsökning i appen)
+app.get('/api/ai/status', async (_req, res) => {
+  const opts = loadOptions();
+  if (opts.ollama_url) {
+    const url = opts.ollama_url.replace(/\/+$/, '');
+    try {
+      const r = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) });
+      const models = r.ok ? (await r.json()).models?.map(m => m.name) : [];
+      res.json({ provider: 'ollama', url, model: opts.ollama_model || 'llama3.2:3b', reachable: r.ok, models });
+    } catch (e) {
+      res.json({ provider: 'ollama', url, model: opts.ollama_model || 'llama3.2:3b', reachable: false, reason: e.message });
+    }
+  } else {
+    res.json({ provider: 'claude', model: CLAUDE_MODEL, configured: !!getClaudeKey() });
+  }
+});
+
+/** Plockar ut första JSON-objektet ur ett AI-svar (som ibland pratar runt). */
+function parseAiJson(text) {
   return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
 }
 
@@ -463,8 +515,8 @@ Skriv en kort dagsrapport på svenska (max 4 meningar) och föreslå max 3 nya k
 {"sammanfattning": "...", "forslag": ["...", "..."]}`;
 
   try {
-    const text = await callClaude(prompt, 500);
-    const parsed = parseClaudeJson(text);
+    const text = await callAI(prompt, { maxTokens: 500, json: true });
+    const parsed = parseAiJson(text);
 
     const insight = {
       id: 'ins_' + Date.now(),
@@ -491,7 +543,7 @@ app.post('/api/assistent/sammanfatta', async (req, res) => {
   if (!text) return res.status(400).json({ error: 'Ingen text att sammanfatta.' });
 
   try {
-    const summary = await callClaude(`Sammanfatta denna text kortfattat på svenska (max 3 meningar):\n\n${text}`, 300);
+    const summary = await callAI(`Sammanfatta denna text kortfattat på svenska (max 3 meningar):\n\n${text}`, { maxTokens: 300 });
     res.json({ summary });
   } catch (e) {
     console.error('[assistent] Sammanfattningsfel:', e.message);
@@ -582,8 +634,8 @@ Välj ut de VIKTIGASTE (max 6) — sådant som kräver handling eller är releva
 Svara med ENDAST giltig JSON:
 {"viktiga": [{"index": 0, "sammanfattning": "en mening om vad mailet gäller", "atgard": "kort åtgärd eller tom sträng"}]}`;
 
-  const text = await callClaude(prompt, 800);
-  const parsed = parseClaudeJson(text);
+  const text = await callAI(prompt, { maxTokens: 800, json: true });
+  const parsed = parseAiJson(text);
   const picked = (parsed.viktiga || []).filter(v => all[v.index]).map(v => ({
     id: `mail_${all[v.index].account}_${all[v.index].uid}`,
     account: all[v.index].account,

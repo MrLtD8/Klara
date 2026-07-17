@@ -1,6 +1,6 @@
 name: "Familjeapp"
 description: "Familjeplanering - kalender, uppgifter och automationer"
-version: "1.8.0"
+version: "1.9.0"
 slug: "familjeapp"
 init: false
 arch:
@@ -15,10 +15,14 @@ ports_description:
 panel_icon: mdi:home-heart
 panel_title: Familjeapp
 options:
+  ollama_url: ""
+  ollama_model: "llama3.2:3b"
   anthropic_api_key: ""
   notify_service: "notify"
   mail_accounts: []
 schema:
+  ollama_url: "str?"
+  ollama_model: "str?"
   anthropic_api_key: "str?"
   notify_service: "str?"
   mail_accounts:

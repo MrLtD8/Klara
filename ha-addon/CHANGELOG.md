@@ -1,5 +1,15 @@
 # Ändringslogg — Familjeapp
 
+## 1.10.0 (2026-07-17)
+
+### Viktiga mail som egen app + prioritering
+- **Ny sida "Viktiga mail"** i Klara (aktiveras i Hantera appar): hela mail-digesten plus prioriteringsinställningar.
+- **VIP-listan**: avsändare/domäner/nyckelord (t.ex. `unikum.net`, `samfällighet`) tas ALLTID med — deterministiskt, även om AI:n missar dem. VIP-mail märks med lila etikett och sorteras överst.
+- **Blockeringslistan**: avsändare/nyckelord som aldrig visas och aldrig ens skickas till AI:n.
+- Triage-prompten prioriterar nu uttryckligen skola/förskola, samfällighet och privata mail från riktiga personer.
+
+---
+
 ## 1.9.0 (2026-07-17)
 
 ### Lokal AI via Ollama

@@ -621,36 +621,63 @@ async function runMailDigest() {
   }
   if (!all.length) throw new Error('Inga mail kunde hämtas — kontrollera konton och app-lösenord.');
 
-  const mailList = all.map((m, i) =>
+  // Prioriteringsregler från appen (Mail-sidan): VIP tas alltid med, blockerade ses aldrig
+  const data0 = readData();
+  const prefs = data0.kl_mail_prefs || {};
+  const vip   = (prefs.vip   || []).map(s => s.toLowerCase().trim()).filter(Boolean);
+  const block = (prefs.block || []).map(s => s.toLowerCase().trim()).filter(Boolean);
+  const matchesList = (m, list) => list.some(t =>
+    (m.fromAddr || '').toLowerCase().includes(t) ||
+    (m.from || '').toLowerCase().includes(t) ||
+    (m.subject || '').toLowerCase().includes(t));
+
+  const candidates = all.filter(m => !matchesList(m, block));
+
+  const mailList = candidates.map((m, i) =>
     `${i}. [${m.account}] Från: ${m.from} <${m.fromAddr}> | Ämne: ${m.subject} | ${m.snippet.slice(0, 200)}`
   ).join('\n');
+
+  const vipHint = vip.length
+    ? `\nFamiljen har markerat dessa avsändare/nyckelord som EXTRA VIKTIGA — ta alltid med mail som matchar: ${vip.join(', ')}.`
+    : '';
 
   const prompt = `Du hjälper en barnfamilj att sortera sin mail. Här är de senaste mailen:
 
 ${mailList}
 
-Välj ut de VIKTIGASTE (max 6) — sådant som kräver handling eller är relevant för familjen: räkningar, skola/förskola, vård, myndigheter, bokningar, deadlines. Ignorera nyhetsbrev, reklam och kvitton på småköp.
+Välj ut de VIKTIGASTE (max 6) — sådant som kräver handling eller är relevant för familjen: räkningar, skola/förskola, vård, myndigheter, samfällighet, bokningar, deadlines, privata mail från riktiga personer. Ignorera nyhetsbrev, reklam och kvitton på småköp.${vipHint}
 
 Svara med ENDAST giltig JSON:
 {"viktiga": [{"index": 0, "sammanfattning": "en mening om vad mailet gäller", "atgard": "kort åtgärd eller tom sträng"}]}`;
 
   const text = await callAI(prompt, { maxTokens: 800, json: true });
   const parsed = parseAiJson(text);
-  const picked = (parsed.viktiga || []).filter(v => all[v.index]).map(v => ({
-    id: `mail_${all[v.index].account}_${all[v.index].uid}`,
-    account: all[v.index].account,
-    from: all[v.index].from,
-    subject: all[v.index].subject,
-    date: all[v.index].date,
-    summary: v.sammanfattning || '',
-    action: v.atgard || '',
-  }));
+  const toItem = (m, summary, action, isVip) => ({
+    id: `mail_${m.account}_${m.uid}`,
+    account: m.account,
+    from: m.from,
+    subject: m.subject,
+    date: m.date,
+    summary: summary || '',
+    action: action || '',
+    vip: !!isVip,
+  });
 
-  const digest = { time: new Date().toISOString(), scanned: all.length, items: picked };
+  const picked = (parsed.viktiga || []).filter(v => candidates[v.index])
+    .map(v => toItem(candidates[v.index], v.sammanfattning, v.atgard, matchesList(candidates[v.index], vip)));
+
+  // Deterministisk garanti: VIP-mail som AI:n missade läggs alltid till överst
+  const pickedIds = new Set(picked.map(p => p.id));
+  const vipMissed = candidates.filter(m => matchesList(m, vip) && !pickedIds.has(`mail_${m.account}_${m.uid}`))
+    .map(m => toItem(m, '', '', true));
+
+  const items = [...vipMissed, ...picked].sort((a, b) => (b.vip ? 1 : 0) - (a.vip ? 1 : 0)).slice(0, 10);
+
+  const digest = { time: new Date().toISOString(), scanned: all.length, blocked: all.length - candidates.length, items };
   const data = readData();
   data.kl_mail_digest = digest;
   writeData(data);
-  console.log(`[mail] Digest klar: ${picked.length} viktiga av ${all.length} skannade`);
+  console.log(`[mail] Digest klar: ${items.length} viktiga (${vipMissed.length} VIP-garanterade) av ${all.length} skannade`);
   return digest;
 }
 

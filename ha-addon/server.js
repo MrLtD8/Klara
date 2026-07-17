@@ -430,7 +430,11 @@ async function callClaude(prompt, maxTokens = 500) {
       messages: [{ role: 'user', content: prompt }],
     }),
   });
-  if (!resp.ok) throw new Error(`Claude API ${resp.status}`);
+  if (!resp.ok) {
+    // Anthropic skickar felorsaken i svarskroppen — ta med den (t.ex. "credit balance too low")
+    const detail = await resp.text().then(t => { try { return JSON.parse(t).error?.message || t; } catch { return t; } }).catch(() => '');
+    throw new Error(`Claude API ${resp.status}${detail ? ': ' + detail.slice(0, 200) : ''}`);
+  }
   const out = await resp.json();
   return out.content?.[0]?.text || '';
 }

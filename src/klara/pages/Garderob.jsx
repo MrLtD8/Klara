@@ -64,18 +64,28 @@ export default function Garderob({ members = [] }) {
   const [fSeason, setFSeason] = useState('alla');
   const [fWho, setFWho] = useState('');
   const [fImage, setFImage] = useState(''); // nedskalad data-URL
+  const [loadingImg, setLoadingImg] = useState(false);
   const fileRef = useRef(null);
 
   async function onPickImage(e) {
-    const file = e.target.files?.[0];
+    let file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
     setError('');
+    setLoadingImg(true);
     try {
+      // HEIC (iPhone/iPad-foton) kan inte avkodas av Chrome/Windows —
+      // konvertera till JPEG först. Biblioteket laddas bara vid behov.
+      if (/\.heic$|\.heif$/i.test(file.name) || ['image/heic', 'image/heif'].includes(file.type)) {
+        const { default: heic2any } = await import('heic2any');
+        const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
+        file = Array.isArray(converted) ? converted[0] : converted;
+      }
       setFImage(await downscaleImage(file));
     } catch (err) {
-      setError(err.message);
+      setError('Kunde inte läsa bilden' + (err.message ? ` (${err.message})` : '') + '. Prova JPEG/PNG.');
     }
+    setLoadingImg(false);
   }
 
   async function saveItem() {
@@ -143,7 +153,7 @@ export default function Garderob({ members = [] }) {
       {adding && (
         <div style={{ background: T.card, border: `2px solid ${T.purple}`, borderRadius: T.radius, padding: 24, boxShadow: T.shadow, marginBottom: 24, maxWidth: 520 }}>
           <label style={labelStyle}>Foto</label>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPickImage} style={{ display: 'none' }} />
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif" capture="environment" onChange={onPickImage} style={{ display: 'none' }} />
           {fImage ? (
             <div style={{ position: 'relative', width: 160, marginBottom: 14 }}>
               <img src={fImage} alt="Valt plagg" style={{ width: 160, height: 160, objectFit: 'cover', borderRadius: T.radiusSm, border: `1px solid ${T.border}` }} />
@@ -153,10 +163,10 @@ export default function Garderob({ members = [] }) {
               </button>
             </div>
           ) : (
-            <button onClick={() => fileRef.current?.click()}
-              style={{ width: 160, height: 160, borderRadius: T.radiusSm, border: `2px dashed ${T.border}`, background: T.bg, color: T.textMuted, fontSize: 13, cursor: 'pointer', marginBottom: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <span style={{ fontSize: 32 }}>📷</span>
-              Ta foto / välj bild
+            <button onClick={() => !loadingImg && fileRef.current?.click()}
+              style={{ width: 160, height: 160, borderRadius: T.radiusSm, border: `2px dashed ${T.border}`, background: T.bg, color: T.textMuted, fontSize: 13, cursor: loadingImg ? 'wait' : 'pointer', marginBottom: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <span style={{ fontSize: 32 }}>{loadingImg ? '⏳' : '📷'}</span>
+              {loadingImg ? 'Läser in bilden…' : 'Ta foto / välj bild'}
             </button>
           )}
 

@@ -1,5 +1,13 @@
 # Ändringslogg — Familjeapp
 
+## 1.13.1 (2026-07-18)
+
+### Garderob: HEIC-stöd
+- iPhone/iPad-foton i **HEIC-format** konverteras nu automatiskt till JPEG i webbläsaren (konverteraren laddas bara när den behövs). Filväljaren accepterar `.heic`/`.heif` även på Windows.
+- "Läser in bilden…"-indikator medan foto bearbetas.
+
+---
+
 ## 1.13.0 (2026-07-18)
 
 ### Garderob — ny app

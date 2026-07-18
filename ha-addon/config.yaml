@@ -1,6 +1,6 @@
 name: "Familjeapp"
 description: "Familjeplanering - kalender, uppgifter och automationer"
-version: "1.12.0"
+version: "1.13.0"
 slug: "familjeapp"
 init: false
 arch:

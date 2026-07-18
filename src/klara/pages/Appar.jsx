@@ -7,7 +7,7 @@ import {
   Code2, Globe, Trash2, RefreshCw, AlertCircle, Copy, ChevronDown, ChevronUp,
   Calendar, CheckSquare, GraduationCap, FolderOpen, Wrench, Wallet,
   Star, List, Heart, Bot, BarChart2, Users, MessageCircle, Pill, Zap,
-  Mail as MailIcon,
+  Mail as MailIcon, Shirt,
 } from 'lucide-react';
 
 // ─── Inbyggda moduler ─────────────────────────────────────────────────────────
@@ -23,6 +23,7 @@ const BUILT_IN_MODULES = [
   { id: 'assistent',   label: 'Assistent',                    Icon: Bot,          desc: 'AI-dagsrapport och sammanfattning' },
   { id: 'automationer',label: 'Automationer',                  Icon: Zap,          desc: 'Regler och påminnelser baserat på tid och händelser' },
   { id: 'mail',        label: 'Viktiga mail',                  Icon: MailIcon,     desc: 'AI-sorterad mail med VIP-prioritering' },
+  { id: 'garderob',    label: 'Garderob',                      Icon: Shirt,        desc: 'Digital garderob med foton på plaggen' },
   { id: 'kravdatabas', label: 'Kravdatabas',                  Icon: BarChart2,    desc: 'Alla krav och status' },
   { id: 'familj',      label: 'Familj',                       Icon: Users,        desc: 'Familjeöversikt som separat sida' },
   { id: 'medicin',     label: 'Medicin',                      Icon: Pill,         desc: 'Medicinhantering' },

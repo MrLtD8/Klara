@@ -1,5 +1,15 @@
 # Ändringslogg — Familjeapp
 
+## 1.13.0 (2026-07-18)
+
+### Garderob — ny app
+- **Digital garderob**: fota plagget direkt med iPadens kamera (📷-knappen öppnar kameran, inget HTTPS krävs), sätt namn, kategori, säsong och ägare.
+- Bilder skalas ner i webbläsaren (~600px JPEG) och lagras som filer i `/data/wardrobe/` på HA — datafilen och synken sväller inte.
+- Filtrera på kategori (👕👖👗🧥👟🧢) och familjemedlem.
+- Aktiveras i **Hantera appar** → Garderob.
+
+---
+
 ## 1.12.0 (2026-07-18)
 
 ### Personliga dashboards

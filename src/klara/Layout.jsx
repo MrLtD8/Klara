@@ -21,6 +21,7 @@ import Assistent from './pages/Assistent';
 import Appar from './pages/Appar';
 import Automationer from './pages/Automationer';
 import MailPage from './pages/Mail';
+import Garderob from './pages/Garderob';
 
 // ─── Hjälpfunktion för datum ─────────────────────────────────────────────────
 function daysFromNow(n) {
@@ -84,6 +85,7 @@ const DEFAULT_VISIBLE = {
   assistent:     false,
   automationer:  false,
   mail:          false,
+  garderob:      false,
   kravdatabas:   false,
   meddelanden:   false,
   familj:        false,
@@ -137,6 +139,7 @@ export default function KlaraLayout() {
       case 'assistent':    return <Assistent members={members} />;
       case 'automationer': return <Automationer members={members} />;
       case 'mail':         return <MailPage />;
+      case 'garderob':     return <Garderob members={members} />;
       case 'appar':        return <Appar members={members} tasks={tasks} events={events} visiblePages={visiblePages} setVisiblePages={setVisiblePages} />;
       default: {
         // Installerade extra-appar: 'app:custom_123'

@@ -816,6 +816,46 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000);
 
+// ══════════════════════════════════════════════════════════════
+//  Garderob — bildlagring
+//
+//  Metadata (namn, kategori, ägare) ligger i kl_wardrobe i datafilen;
+//  själva bilderna sparas som filer i /data/wardrobe/ så att
+//  datasynken inte sväller. Klienten skalar ner till ~600px JPEG
+//  innan uppladdning.
+// ══════════════════════════════════════════════════════════════
+const WARDROBE_DIR = path.join(path.dirname(DATA_FILE), 'wardrobe');
+const IMAGE_ID_RE = /^w_[\w-]+$/;
+
+app.post('/api/wardrobe/image', (req, res) => {
+  const dataUrl = req.body?.data || '';
+  const m = dataUrl.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+  if (!m) return res.status(400).json({ error: 'Förväntar data-URL med jpeg/png/webp.' });
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 2 * 1024 * 1024) return res.status(413).json({ error: 'Bilden är för stor (max 2 MB efter nedskalning).' });
+  if (!fs.existsSync(WARDROBE_DIR)) fs.mkdirSync(WARDROBE_DIR, { recursive: true });
+  const id = 'w_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  fs.writeFileSync(path.join(WARDROBE_DIR, id + '.jpg'), buf);
+  res.json({ id });
+});
+
+app.get('/api/wardrobe/image/:id', (req, res) => {
+  const id = req.params.id;
+  if (!IMAGE_ID_RE.test(id)) return res.status(400).end();
+  const file = path.join(WARDROBE_DIR, id + '.jpg');
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.setHeader('Content-Type', 'image/jpeg');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  fs.createReadStream(file).pipe(res);
+});
+
+app.delete('/api/wardrobe/image/:id', (req, res) => {
+  const id = req.params.id;
+  if (!IMAGE_ID_RE.test(id)) return res.status(400).end();
+  try { fs.unlinkSync(path.join(WARDROBE_DIR, id + '.jpg')); } catch {}
+  res.json({ deleted: true });
+});
+
 // ── Statiska filer (React-bygget) ─────────────────────────────
 app.use(express.static(PUBLIC));
 

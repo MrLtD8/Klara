@@ -64,6 +64,7 @@ export default function Assistent({ members = [] }) {
 
     // Medicine reminders
     const medWarnings = medicins.filter(m => {
+      if (m.active === false) return false;
       if (!m.dose || m.dose <= 0) return false;
       const days = Math.floor(m.stock / m.dose);
       return days <= (m.threshold || 7);

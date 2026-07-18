@@ -142,11 +142,25 @@ export default function Medicin({ members = [], guestMode = false }) {
       return { ...m, stock: Math.max(0, m.stock - m.dose), lastGiven: now.toISOString(), log: [{ time: now.toLocaleString('sv-SE') }, ...(m.log || [])].slice(0, 30) };
     }));
   }
+  function toggleActive(id) {
+    setMedicins(prev => prev.map(m => m.id === id ? { ...m, active: m.active === false } : m));
+  }
+  function refill(med) {
+    const input = window.prompt(`Fyll på ${med.name} — antal:`, med.lastRefill || '');
+    if (input === null) return;
+    const amt = parseInt(input, 10);
+    if (!amt || amt <= 0) return;
+    const now = new Date();
+    setMedicins(prev => prev.map(m => m.id === med.id
+      ? { ...m, stock: m.stock + amt, lastRefill: amt, log: [{ time: now.toLocaleString('sv-SE'), type: 'refill', amount: amt }, ...(m.log || [])].slice(0, 30) }
+      : m));
+  }
   function getMember(id) { return members.find(m => m.id === id); }
 
-  // Filter by time-of-day tab
-  const displayed = viewTab === 'alla' ? medicins
-    : medicins.filter(m => m.times?.[viewTab]);
+  // Filter by time-of-day tab. Pausade mediciner visas bara under "Alla", sist.
+  const displayed = (viewTab === 'alla'
+    ? medicins.slice().sort((a, b) => (a.active === false ? 1 : 0) - (b.active === false ? 1 : 0))
+    : medicins.filter(m => m.active !== false && m.times?.[viewTab]));
 
   const tabBtn = (id, label, icon) => (
     <button key={id} onClick={() => setViewTab(id)} style={{
@@ -180,7 +194,7 @@ export default function Medicin({ members = [], guestMode = false }) {
       {/* Summary strip for current tab */}
       {viewTab !== 'alla' && (() => {
         const tod = TIMES_OF_DAY.find(t => t.id === viewTab);
-        const meds = medicins.filter(m => m.times?.[viewTab]);
+        const meds = medicins.filter(m => m.active !== false && m.times?.[viewTab]);
         return meds.length > 0 ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '12px 18px', background: tod.bg, borderRadius: T.radius, border: `1px solid ${tod.color}33` }}>
             <span style={{ fontSize: 24 }}>{tod.icon}</span>
@@ -197,28 +211,41 @@ export default function Medicin({ members = [], guestMode = false }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
         {displayed.map(med => {
+          const inactive = med.active === false;
           const days  = daysLeft(med.stock, med.dose);
-          const sc    = statusColor(days);
-          const sb    = statusBg(days);
+          const sc    = inactive ? T.border : statusColor(days);
+          const sb    = inactive ? T.bg : statusBg(days);
           const member = getMember(med.who);
           const activeTimes = TIMES_OF_DAY.filter(t => med.times?.[t.id]);
 
           // Can give now?
-          let canGive = true;
-          if (med.intervalHours && med.lastGiven) {
+          let canGive = !inactive;
+          if (canGive && med.intervalHours && med.lastGiven) {
             const nextAt = new Date(med.lastGiven).getTime() + med.intervalHours * 3600000;
             canGive = Date.now() >= nextAt;
           }
 
           return (
-            <div key={med.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 20, boxShadow: T.shadow, borderTop: `3px solid ${sc}` }}>
+            <div key={med.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 20, boxShadow: T.shadow, borderTop: `3px solid ${sc}`, opacity: inactive ? 0.6 : 1, transition: 'opacity 0.15s' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: T.text }}>{med.name}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: T.text }}>
+                    {med.name}
+                    {inactive && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: T.textMuted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>Pausad</span>}
+                  </div>
                   <div style={{ fontSize: 12, color: T.textMuted }}>{med.form}{member ? ` — ${member.name}` : ''}</div>
                 </div>
-                <div style={{ background: sb, color: sc, borderRadius: 8, padding: '4px 12px', fontSize: 13, fontWeight: 700 }}>
-                  {days === Infinity ? '∞' : days} dagar
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={() => toggleActive(med.id)}
+                    title={inactive ? 'Aktivera medicinen' : 'Pausa medicinen'}
+                    style={{ width: 40, height: 22, borderRadius: 11, background: inactive ? T.border : T.green, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+                  >
+                    <div style={{ position: 'absolute', top: 3, left: inactive ? 3 : 21, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  </button>
+                  <div style={{ background: sb, color: inactive ? T.textMuted : sc, borderRadius: 8, padding: '4px 12px', fontSize: 13, fontWeight: 700 }}>
+                    {days === Infinity ? '∞' : days} dagar
+                  </div>
                 </div>
               </div>
 
@@ -239,13 +266,13 @@ export default function Medicin({ members = [], guestMode = false }) {
               )}
 
               {/* Timer countdown */}
-              {med.intervalHours && (
+              {!inactive && med.intervalHours && (
                 <div style={{ marginBottom: 12 }}>
                   <Countdown lastGiven={med.lastGiven} intervalHours={med.intervalHours} />
                 </div>
               )}
 
-              {days <= med.threshold && (
+              {!inactive && days <= med.threshold && (
                 <div style={{ background: T.redLight, color: T.red, borderRadius: 6, padding: '6px 10px', fontSize: 12, marginBottom: 12, fontWeight: 600 }}>
                   ⚠️ Dags att beställa! Räcker till {addDays(days)}
                 </div>
@@ -271,7 +298,14 @@ export default function Medicin({ members = [], guestMode = false }) {
                   border: 'none', borderRadius: T.radiusSm, padding: '9px', fontSize: 13, fontWeight: 600,
                   cursor: canGive ? 'pointer' : 'not-allowed',
                 }}>
-                  {canGive ? '💊 Ge nu' : '⏳ Vänta'}
+                  {inactive ? '⏸ Pausad' : canGive ? '💊 Ge nu' : '⏳ Vänta'}
+                </button>
+                <button
+                  onClick={() => refill(med)}
+                  title={med.lastRefill ? `Senaste påfyllning: ${med.lastRefill} st` : 'Fyll på lagret'}
+                  style={{ background: T.blueLight, color: T.blueText, border: 'none', borderRadius: T.radiusSm, padding: '9px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  🔄{med.lastRefill ? ` +${med.lastRefill}` : ' Fyll på'}
                 </button>
                 <a href={`https://www.fass.se/LIF/startpage?query=${encodeURIComponent(med.name)}`} target="_blank" rel="noopener noreferrer" style={{ background: T.blueLight, color: T.blueText, borderRadius: T.radiusSm, padding: '9px 12px', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
                   FASS

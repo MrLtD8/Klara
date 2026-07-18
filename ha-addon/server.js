@@ -308,7 +308,7 @@ function checkCondition(cond, data) {
   const day = new Date().getDay();
   switch (cond) {
     case 'med_not_given': {
-      const meds = data.kl_medicin || [];
+      const meds = (data.kl_medicin || []).filter(m => m.active !== false);
       return meds.some(m => !m.lastGiven || m.lastGiven.slice(0, 10) !== today);
     }
     case 'task_not_done': return (data.kl_tasks || []).some(t => t.lane !== 'done');
@@ -503,7 +503,7 @@ app.post('/api/assistent/rapport', async (_req, res) => {
 
   const eventsToday = (data.kl_events || []).filter(e => e.date === today).map(e => e.title);
   const tasksOpen   = (data.kl_tasks  || []).filter(t => t.lane !== 'done').map(t => `${t.title} (${t.lane === 'progress' ? 'pågår' : 'att göra'}${t.prio === 'high' ? ', hög prio' : ''})`);
-  const medsPending = (data.kl_medicin || []).filter(m => !m.lastGiven || m.lastGiven.slice(0, 10) !== today).map(m => m.name);
+  const medsPending = (data.kl_medicin || []).filter(m => m.active !== false && (!m.lastGiven || m.lastGiven.slice(0, 10) !== today)).map(m => m.name);
 
   const prompt = `Du är familjens assistent. Idag är det ${dayName}.
 

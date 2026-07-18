@@ -342,7 +342,7 @@ function MedicinChecklist({ medicins, setMedicins, medicinToday, setMedicinToday
     setMedicinToday({ date: todayStr, taken: { ...currentTaken, [med.id]: newPeriods } });
   }
 
-  const periodsWithMeds = MED_TIMES.filter(tod => medicins.some(m => m.times?.[tod.id]));
+  const periodsWithMeds = MED_TIMES.filter(tod => medicins.some(m => m.active !== false && m.times?.[tod.id]));
 
   if (medicins.length === 0) {
     return <div style={{ fontSize: 13, color: T.textMuted }}>Inga mediciner inlagda.</div>;
@@ -354,7 +354,7 @@ function MedicinChecklist({ medicins, setMedicins, medicinToday, setMedicinToday
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {periodsWithMeds.map(tod => {
-        const todMeds = medicins.filter(m => m.times?.[tod.id]);
+        const todMeds = medicins.filter(m => m.active !== false && m.times?.[tod.id]);
         const takenCount = todMeds.filter(m => isTaken(m.id, tod.id)).length;
         const allTaken = takenCount === todMeds.length;
         const isCurrent = tod.id === currentPeriod;

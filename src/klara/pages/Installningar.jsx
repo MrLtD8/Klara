@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
 import { DEFAULT_GCAL, normalizeGcal, GCAL_COLORS, newCalendarId } from '../../gcal';
@@ -71,6 +71,82 @@ export default function Installningar({ members, setMembers, focus, setFocus, on
     setDesign(d);
     // Designerna är separata React-träd — ladda om så rätt rot renderas.
     setTimeout(() => window.location.reload(), 60);
+  }
+
+  // ── Säkerhetskopiering ──
+  const [backups, setBackups] = useState([]);
+  const [backupMsg, setBackupMsg] = useState('');
+  const fileInputRef = useRef(null);
+
+  const loadBackups = () => {
+    fetch('/api/backups').then(r => r.json()).then(d => setBackups(d.backups || [])).catch(() => {});
+  };
+  useEffect(loadBackups, []);
+
+  async function downloadBackup() {
+    try {
+      const res = await fetch('/api/backup');
+      if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `klara-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setBackupMsg('Backup nedladdad ✓');
+    } catch (e) {
+      setBackupMsg('Fel: ' + e.message);
+    }
+  }
+
+  async function snapshotNow() {
+    try {
+      const res = await fetch('/api/backup/now', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+      setBackups(d.backups || []);
+      setBackupMsg('Snapshot skapad på servern ✓');
+    } catch (e) {
+      setBackupMsg('Fel: ' + e.message);
+    }
+  }
+
+  async function restoreFromFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // tillåt samma fil igen
+    if (!file) return;
+    if (!window.confirm(`Ersätta ALL data med innehållet i "${file.name}"? En ångra-punkt sparas på servern.`)) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text); // validera innan vi skickar
+      const res = await fetch('/api/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+      window.location.reload(); // hooken läser in nya serverdatan vid mount
+    } catch (err) {
+      setBackupMsg('Fel vid återställning: ' + err.message);
+    }
+  }
+
+  async function restoreSnapshot(name) {
+    if (!window.confirm(`Återställa data från "${name}"? En ångra-punkt sparas först.`)) return;
+    try {
+      const res = await fetch('/api/backup/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+      window.location.reload();
+    } catch (err) {
+      setBackupMsg('Fel vid återställning: ' + err.message);
+    }
   }
 
   return (
@@ -331,6 +407,46 @@ export default function Installningar({ members, setMembers, focus, setFocus, on
             <button onClick={() => { setTempFocus(focus); setFocusEdit(true); }} style={editBtnSt}>✏️ Redigera</button>
           </div>
         )}
+      </Section>
+
+      {/* ── Säkerhetskopiering ───────────────────────────────── */}
+      <Section
+        title="💾 Säkerhetskopiering"
+        action={
+          <button onClick={snapshotNow} style={editBtnSt}>+ Snapshot nu</button>
+        }
+      >
+        <p style={{ margin: '0 0 14px', fontSize: 13, color: T.textMuted, lineHeight: 1.6 }}>
+          All appdata (uppgifter, kalender, familj, mailinställningar m.m.) ligger i en fil på HA-enheten.
+          Servern tar automatiskt en snapshot per dygn (14 sparas). Ladda ner en kopia då och då —
+          den skyddar även om HA-enheten går sönder.
+        </p>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <button onClick={downloadBackup} style={saveBtnSm}>⬇ Ladda ner backup</button>
+          <button onClick={() => fileInputRef.current?.click()} style={cancelBtnSm}>⬆ Återställ från fil…</button>
+          <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={restoreFromFile} style={{ display: 'none' }} />
+        </div>
+        {backupMsg && <p style={{ margin: '0 0 14px', fontSize: 13, color: backupMsg.startsWith('Fel') ? T.red : '#16A34A', fontWeight: 600 }}>{backupMsg}</p>}
+
+        {backups.length > 0 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Snapshots på servern</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {backups.slice(0, 8).map(b => (
+                <div key={b.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: T.radiusSm, background: T.bg, border: `1px solid ${T.border}` }}>
+                  <span style={{ flex: 1, fontSize: 12, color: T.text, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
+                  <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0 }}>{Math.round(b.size / 1024)} kB</span>
+                  <button onClick={() => restoreSnapshot(b.name)} style={{ ...cancelBtnSm, padding: '4px 10px', fontSize: 12, flexShrink: 0 }}>Återställ</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p style={{ margin: '14px 0 0', fontSize: 11, color: T.textMuted }}>
+          Maillösenord och API-nycklar ingår inte — de ligger i addonets konfiguration och täcks av
+          HA:s egen backup (Inställningar → System → Säkerhetskopior).
+        </p>
       </Section>
 
       {/* ── Om Klara ─────────────────────────────────────────── */}

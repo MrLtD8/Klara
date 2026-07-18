@@ -701,6 +701,113 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000);
 
+// ══════════════════════════════════════════════════════════════
+//  Säkerhetskopiering
+//
+//  Tre lager:
+//    1. Automatiska dagliga snapshots i /data/backups (behåll 14)
+//    2. GET /api/backup — ladda ner datafilen (off-device-kopia)
+//    3. POST /api/restore — läs tillbaka en backupfil
+//
+//  OBS: addon-options (maillösenord, API-nycklar) ägs av HA och
+//  ingår INTE — de täcks av HA:s egen backup (Inställningar →
+//  System → Säkerhetskopior).
+// ══════════════════════════════════════════════════════════════
+const BACKUP_DIR = path.join(path.dirname(DATA_FILE), 'backups');
+const BACKUP_KEEP = 14;
+const BACKUP_NAME_RE = /^familjeapp-[\w.-]+\.json$/; // skydd mot path traversal
+
+function listBackups() {
+  if (!fs.existsSync(BACKUP_DIR)) return [];
+  return fs.readdirSync(BACKUP_DIR)
+    .filter(f => BACKUP_NAME_RE.test(f))
+    .map(f => {
+      const st = fs.statSync(path.join(BACKUP_DIR, f));
+      return { name: f, time: st.mtime.toISOString(), size: st.size };
+    })
+    .sort((a, b) => b.time.localeCompare(a.time));
+}
+
+function createSnapshot(label) {
+  if (!fs.existsSync(DATA_FILE)) return null;
+  if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+  const name = `familjeapp-${label ? label + '-' : ''}${stamp}.json`;
+  fs.copyFileSync(DATA_FILE, path.join(BACKUP_DIR, name));
+  // Rotera: behåll de senaste BACKUP_KEEP (pre-restore-filer räknas med)
+  const extra = listBackups().slice(BACKUP_KEEP);
+  extra.forEach(b => { try { fs.unlinkSync(path.join(BACKUP_DIR, b.name)); } catch {} });
+  console.log(`[backup] Snapshot skapad: ${name}`);
+  return name;
+}
+
+/** Rimlighetskoll innan vi skriver över datafilen med uppladdat innehåll. */
+function looksLikeAppData(obj) {
+  return obj && typeof obj === 'object' && !Array.isArray(obj) &&
+    Object.keys(obj).some(k => k.startsWith('kl_') || k.startsWith('fp_') || k === 'app_design');
+}
+
+// Ladda ner aktuell data som fil
+app.get('/api/backup', (_req, res) => {
+  if (!fs.existsSync(DATA_FILE)) return res.status(404).json({ error: 'Ingen datafil ännu.' });
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Disposition', `attachment; filename="klara-backup-${stamp}.json"`);
+  res.setHeader('Content-Type', 'application/json');
+  fs.createReadStream(DATA_FILE).pipe(res);
+});
+
+// Lista snapshots på servern
+app.get('/api/backups', (_req, res) => res.json({ backups: listBackups() }));
+
+// Skapa snapshot manuellt
+app.post('/api/backup/now', (_req, res) => {
+  const name = createSnapshot('manuell');
+  if (!name) return res.status(404).json({ error: 'Ingen datafil att kopiera ännu.' });
+  res.json({ created: name, backups: listBackups() });
+});
+
+// Återställ från uppladdad fil (ersätter hela datafilen)
+app.post('/api/restore', (req, res) => {
+  const body = req.body;
+  if (!looksLikeAppData(body)) {
+    return res.status(400).json({ error: 'Filen ser inte ut som en Klara-backup (hittar inga kl_*-nycklar).' });
+  }
+  createSnapshot('pre-restore'); // ångra-punkt
+  writeData(body);
+  console.log(`[backup] Data återställd från uppladdad fil (${Object.keys(body).length} nycklar)`);
+  res.json({ restored: true, keys: Object.keys(body).length });
+});
+
+// Återställ från server-snapshot
+app.post('/api/backup/restore', (req, res) => {
+  const name = req.body?.name || '';
+  if (!BACKUP_NAME_RE.test(name)) return res.status(400).json({ error: 'Ogiltigt backupnamn.' });
+  const file = path.join(BACKUP_DIR, name);
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'Backupen finns inte.' });
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return res.status(400).json({ error: 'Backupfilen är korrupt (ogiltig JSON).' });
+  }
+  if (!looksLikeAppData(parsed)) return res.status(400).json({ error: 'Backupfilen ser inte ut som Klara-data.' });
+  createSnapshot('pre-restore');
+  writeData(parsed);
+  console.log(`[backup] Data återställd från snapshot: ${name}`);
+  res.json({ restored: true, from: name });
+});
+
+// Dagligt snapshot: kolla varje timme, skapa en per dygn
+let lastSnapshotDay = '';
+setInterval(() => {
+  const day = todayStr();
+  if (day !== lastSnapshotDay && fs.existsSync(DATA_FILE)) {
+    const already = listBackups().some(b => !b.name.includes('manuell') && !b.name.includes('pre-restore') && b.time.slice(0, 10) === day);
+    if (!already) createSnapshot('');
+    lastSnapshotDay = day;
+  }
+}, 60 * 60 * 1000);
+
 // ── Statiska filer (React-bygget) ─────────────────────────────
 app.use(express.static(PUBLIC));
 

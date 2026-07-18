@@ -1,5 +1,16 @@
 # Ändringslogg — Familjeapp
 
+## 1.11.0 (2026-07-18)
+
+### Säkerhetskopiering
+- **Automatiska snapshots**: servern sparar en kopia av all data per dygn i `/data/backups` (de 14 senaste behålls).
+- **Ladda ner backup** i Inställningar → Säkerhetskopiering — en off-device-kopia som skyddar även om HA-enheten går sönder.
+- **Återställ** från nedladdad fil eller server-snapshot. En ångra-punkt (pre-restore-snapshot) sparas alltid först.
+- Uppladdade filer valideras (måste innehålla `kl_*`-nycklar) och snapshot-namn skyddas mot path traversal.
+- OBS: maillösenord och API-nycklar ligger i addonets konfiguration och ingår inte — de täcks av HA:s egen backup (Inställningar → System → Säkerhetskopior).
+
+---
+
 ## 1.10.0 (2026-07-17)
 
 ### Viktiga mail som egen app + prioritering

@@ -1,5 +1,19 @@
 # Ändringslogg — Familjeapp
 
+## 1.12.0 (2026-07-18)
+
+### Personliga dashboards
+- **Egen sida per familjemedlem**: gå till `/<namn>` (t.ex. `http://192.168.50.119:3000/bjorn`) för en personlig vy med dagens händelser, egna uppgifter (bocka av direkt) och mediciner. Å/ä/ö funkar med eller utan prickar.
+
+### Uppgifter: återkommande + uppgiftspaket
+- **Återkommande uppgifter**: engångs / varje dag / varje vecka / varje månad. Klara återkommande uppgifter återuppstår automatiskt i "Att göra" nästa period, med deluppgifterna avbockade.
+- **Uppgiftspaket** (📦 Paket-knappen): aktivera färdiga paket — Veckostäd, Vårstädning, Höststädning, Öppna/Stänga stugan, Planera kalas — eller skapa egna (en uppgift per rad). Uppgifterna grupperas under paketets namn och dubbleras inte om de redan ligger öppna.
+
+### Mail → kalender & uppgifter
+- AI:n föreslår nu **uppgifter och kalenderhändelser** utifrån viktiga mail ("Betala fakturan", "Utvecklingssamtal 24/8"). Ett klick lägger förslaget på tavlan eller i kalendern.
+
+---
+
 ## 1.11.0 (2026-07-18)
 
 ### Säkerhetskopiering

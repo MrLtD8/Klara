@@ -42,9 +42,29 @@ function SenderList({ title, hint, items, onAdd, onRemove, color, bg, placeholde
 
 export default function Mail() {
   const [prefs, setPrefs] = useLocalStorage('kl_mail_prefs', { vip: [], block: [] });
+  const [, setTasks] = useLocalStorage('kl_tasks', []);
+  const [, setCalEvents] = useLocalStorage('kl_cal_events', []);
   const [digest, setDigest] = useState(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  const [added, setAdded] = useState([]); // "task_<id>" / "event_<id>" som redan lagts till
+
+  function addTaskFromMail(m) {
+    setTasks(prev => [...prev, {
+      id: 't_' + Date.now(), title: m.suggestTask, desc: `Från mail: ${m.subject} (${m.from})`,
+      lane: 'ready', mids: [], tags: ['Hem'], prio: 'med', estimate: '', deadline: '',
+      subtasks: [], epic: '', recur: 'none',
+    }]);
+    setAdded(a => [...a, 'task_' + m.id]);
+  }
+
+  function addEventFromMail(m) {
+    setCalEvents(prev => [...prev, {
+      id: 'ev_' + Date.now(), title: m.suggestEvent.title, date: m.suggestEvent.date,
+      who: '', type: 'note', recur: 'none',
+    }]);
+    setAdded(a => [...a, 'event_' + m.id]);
+  }
 
   const loadDigest = () => {
     fetch('/api/mail/digest').then(r => r.json()).then(setDigest).catch(() => {});
@@ -118,6 +138,24 @@ export default function Mail() {
                 {m.action && (
                   <div style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: '#B45309', background: '#FEF3C7', borderRadius: T.radiusSm, padding: '4px 10px', display: 'inline-block' }}>
                     → {m.action}
+                  </div>
+                )}
+                {(m.suggestTask || m.suggestEvent) && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    {m.suggestTask && (
+                      added.includes('task_' + m.id)
+                        ? <span style={{ fontSize: 12, fontWeight: 600, color: '#16A34A' }}>✓ Uppgift tillagd</span>
+                        : <button onClick={() => addTaskFromMail(m)} style={{ padding: '5px 12px', borderRadius: T.radiusSm, border: 'none', background: T.purpleLight, color: T.purple, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            ✅ Uppgift: {m.suggestTask.length > 40 ? m.suggestTask.slice(0, 40) + '…' : m.suggestTask}
+                          </button>
+                    )}
+                    {m.suggestEvent && (
+                      added.includes('event_' + m.id)
+                        ? <span style={{ fontSize: 12, fontWeight: 600, color: '#16A34A' }}>✓ I kalendern</span>
+                        : <button onClick={() => addEventFromMail(m)} style={{ padding: '5px 12px', borderRadius: T.radiusSm, border: 'none', background: '#DBEAFE', color: '#1E40AF', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            📅 {m.suggestEvent.title.length > 30 ? m.suggestEvent.title.slice(0, 30) + '…' : m.suggestEvent.title} ({m.suggestEvent.date})
+                          </button>
+                    )}
                   </div>
                 )}
               </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
 
@@ -82,6 +82,33 @@ const miniInputStyle = {
   outline: 'none', background: T.bg, display: 'block', marginBottom: 8,
 };
 
+// ─── Återkommande uppgifter ───────────────────────────────────────────────────
+const RECUR_OPTIONS = [
+  { val: 'none',    label: 'Engångs' },
+  { val: 'daily',   label: '🔁 Varje dag' },
+  { val: 'weekly',  label: '🔁 Varje vecka' },
+  { val: 'monthly', label: '🔁 Varje månad' },
+];
+
+/** Start på innevarande period — en klar återkommande uppgift före denna tidpunkt återuppstår. */
+function periodStart(recur) {
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  if (recur === 'daily')   return d;
+  if (recur === 'weekly')  { d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; }
+  if (recur === 'monthly') { d.setDate(1); return d; }
+  return null;
+}
+
+// ─── Uppgiftspaket ────────────────────────────────────────────────────────────
+const DEFAULT_PACKAGES = [
+  { id: 'pk_veckostad',    name: 'Veckostäd',    icon: '🧹', items: ['Dammsuga hela huset', 'Våttorka golv', 'Torka av kök & bänkar', 'Städa badrum', 'Tvätta & vika tvätt', 'Byta sängkläder'] },
+  { id: 'pk_varstad',      name: 'Vårstädning',  icon: '🌸', items: ['Putsa fönster', 'Rensa garderober', 'Vårstäda uteplatsen', 'Ta fram utemöbler', 'Rensa förråd'] },
+  { id: 'pk_hoststad',     name: 'Höststädning', icon: '🍂', items: ['Kratta löv', 'Ställa in utemöbler', 'Rensa hängrännor', 'Kolla vinterdäck', 'Plocka undan trädgårdsslang'] },
+  { id: 'pk_oppna_stugan', name: 'Öppna stugan', icon: '🏡', items: ['Sätta på huvudvattnet', 'Slå på el & värme', 'Kolla efter vinterskador', 'Vädra & städa', 'Handla basvaror'] },
+  { id: 'pk_stang_stugan', name: 'Stänga stugan',icon: '🔒', items: ['Stänga av vattnet & tömma rör', 'Frostskydda avlopp', 'Tömma kyl & frys', 'Lås & kontrollera fönster', 'Ta hem sista tvätten'] },
+  { id: 'pk_kalas',        name: 'Planera kalas',icon: '🎉', items: ['Bestäm datum & gästlista', 'Skicka inbjudningar', 'Planera tema & aktiviteter', 'Beställa/baka tårta', 'Handla mat & dekorationer', 'Fixa goodiebags'] },
+];
+
 export default function Uppgifter({ members: membersProp, tasks: tasksProp, setTasks: setTasksProp }) {
   const [tasksLocal, setTasksLocal] = useLocalStorage('kl_tasks', defaultTasksLocal);
   const [membersLocal] = useLocalStorage('kl_members', defaultMembersLocal);
@@ -96,6 +123,63 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
   const [expandedId, setExpandedId] = useState(null);
   const [filterMember, setFilterMember] = useState('');
 
+  // ── Uppgiftspaket ──
+  const [packages, setPackages] = useLocalStorage('kl_task_packages', DEFAULT_PACKAGES);
+  const [showPackages, setShowPackages] = useState(false);
+  const [pkName, setPkName] = useState('');
+  const [pkItems, setPkItems] = useState('');
+
+  // ── Återkommande: klara uppgifter från förra perioden återuppstår i "Att göra" ──
+  useEffect(() => {
+    setTasks(prev => {
+      let changed = false;
+      const next = prev.map(t => {
+        if (!t.recur || t.recur === 'none' || t.lane !== 'done') return t;
+        const ps = periodStart(t.recur);
+        if (!ps) return t;
+        const doneAt = t.doneAt ? new Date(t.doneAt).getTime() : 0;
+        if (doneAt < ps.getTime()) {
+          changed = true;
+          return { ...t, lane: 'ready', doneAt: '', subtasks: (t.subtasks || []).map(s => ({ ...s, done: false })) };
+        }
+        return t;
+      });
+      return changed ? next : prev;
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function activatePackage(pkg) {
+    setTasks(prev => {
+      // Hoppa över uppgifter som redan ligger öppna från samma paket
+      const openTitles = new Set(prev.filter(t => t.epic === pkg.name && t.lane !== 'done').map(t => t.title));
+      const laneCount = prev.filter(t => t.lane === 'ready').length;
+      const fresh = pkg.items
+        .filter(title => !openTitles.has(title))
+        .map((title, i) => ({
+          id: `t_${Date.now()}_${i}`,
+          title, desc: '', lane: 'ready', mids: [], tags: ['Hem'],
+          prio: 'med', estimate: '', deadline: '', subtasks: [],
+          epic: pkg.name, order: laneCount + i,
+        }));
+      return fresh.length ? [...prev, ...fresh] : prev;
+    });
+    setShowPackages(false);
+  }
+
+  function savePackage() {
+    const name = pkName.trim();
+    const items = pkItems.split('\n').map(s => s.trim()).filter(Boolean);
+    if (!name || !items.length) return;
+    setPackages(prev => [...prev, { id: 'pk_' + Date.now(), name, icon: '📦', items }]);
+    setPkName(''); setPkItems('');
+  }
+
+  function deletePackage(id) {
+    if (window.confirm('Ta bort paketet? (Redan aktiverade uppgifter påverkas inte)')) {
+      setPackages(prev => prev.filter(p => p.id !== id));
+    }
+  }
+
   const [fTitle, setFTitle] = useState('');
   const [fDesc, setFDesc] = useState('');
   const [fTags, setFTags] = useState(['Övrigt']);
@@ -106,6 +190,7 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
   const [fSubtasks, setFSubtasks] = useState([]);
   const [fSubInput, setFSubInput] = useState('');
   const [fEpic, setFEpic] = useState('');
+  const [fRecur, setFRecur] = useState('none');
   const [fLane, setFLane] = useState('ready');
 
   function getMember(id) { return members.find(m => m.id === id); }
@@ -127,7 +212,9 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
     const id = e.dataTransfer.getData('text/plain') || draggingId;
     if (!id) return;
     const laneCount = tasks.filter(t => t.lane === laneId && t.id !== id).length;
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, lane: laneId, order: laneCount } : t));
+    setTasks(prev => prev.map(t => t.id === id
+      ? { ...t, lane: laneId, order: laneCount, ...(laneId === 'done' ? { doneAt: new Date().toISOString() } : {}) }
+      : t));
     setDraggingId(null);
     setDragOverLane(null);
   }
@@ -141,7 +228,7 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
     setFLane(laneId);
     setFTitle(''); setFDesc(''); setFTags(['Övrigt']); setFMids([]);
     setFPrio('med'); setFEstimate(''); setFDeadline('');
-    setFSubtasks([]); setFSubInput(''); setFEpic('');
+    setFSubtasks([]); setFSubInput(''); setFEpic(''); setFRecur('none');
     setShowForm(laneId);
   }
 
@@ -178,6 +265,7 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
       deadline: fDeadline,
       subtasks: fSubtasks,
       epic: fEpic.trim(),
+      recur: fRecur,
       order: laneCount,
     };
     setTasks(prev => [...prev, newTask]);
@@ -216,6 +304,10 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
           <p style={{ margin: '4px 0 0', color: T.textMuted, fontSize: 14 }}>Dra och släpp för att flytta uppgifter</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => setShowPackages(s => !s)} style={{
+            background: showPackages ? T.purple : T.purpleLight, color: showPackages ? '#fff' : T.purple,
+            border: 'none', borderRadius: T.radiusSm, padding: '7px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          }}>📦 Paket</button>
           <span style={{ fontSize: 13, color: T.textMuted }}>Filtrera:</span>
           <button onClick={() => setFilterMember('')} style={{
             background: !filterMember ? T.purple : T.bg, color: !filterMember ? '#fff' : T.textMuted,
@@ -235,6 +327,48 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
           ))}
         </div>
       </div>
+
+      {/* ── Uppgiftspaket-panel ────────────────────────────────── */}
+      {showPackages && (
+        <div style={{ background: T.card, border: `2px solid ${T.purple}`, borderRadius: T.radius, padding: 20, boxShadow: T.shadow, marginBottom: 20 }}>
+          <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700, color: T.text }}>📦 Uppgiftspaket</h3>
+          <p style={{ margin: '0 0 14px', fontSize: 12, color: T.textMuted }}>
+            Aktivera ett paket så läggs alla dess uppgifter i "Att göra", grupperade under paketets namn.
+            Redan öppna uppgifter från samma paket dubbleras inte.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10, marginBottom: 18 }}>
+            {packages.map(pkg => (
+              <div key={pkg.id} style={{ border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: '12px 14px', background: T.bg }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 20 }}>{pkg.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{pkg.name}</div>
+                    <div style={{ fontSize: 11, color: T.textMuted }}>{pkg.items.length} uppgifter</div>
+                  </div>
+                  <button onClick={() => deletePackage(pkg.id)} title="Ta bort paketet"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, fontSize: 13, padding: 2 }}>🗑</button>
+                </div>
+                <button onClick={() => activatePackage(pkg)} style={{
+                  width: '100%', background: T.purple, color: '#fff', border: 'none',
+                  borderRadius: T.radiusSm, padding: '7px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                }}>Aktivera →</button>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8 }}>+ Skapa eget paket</div>
+            <input value={pkName} onChange={e => setPkName(e.target.value)} placeholder="Paketets namn, t.ex. Julförberedelser"
+              style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: '8px 12px', fontSize: 13, color: T.text, background: T.bg, outline: 'none', marginBottom: 8 }} />
+            <textarea value={pkItems} onChange={e => setPkItems(e.target.value)} rows={4}
+              placeholder={'En uppgift per rad:\nPynta granen\nKöpa julklappar\nPlanera julbordet'}
+              style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: '8px 12px', fontSize: 13, color: T.text, background: T.bg, outline: 'none', resize: 'vertical', marginBottom: 8, fontFamily: 'inherit' }} />
+            <button onClick={savePackage} style={{ background: T.purple, color: '#fff', border: 'none', borderRadius: T.radiusSm, padding: '8px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              Spara paket
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
         {LANES.map(lane => {
@@ -317,6 +451,11 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
                               ⏱ {task.estimate}
                             </span>
                           )}
+                          {task.recur && task.recur !== 'none' && (
+                            <span style={{ background: T.purpleLight, color: T.purple, borderRadius: 5, fontSize: 10, padding: '1px 6px', fontWeight: 600 }}>
+                              {RECUR_OPTIONS.find(o => o.val === task.recur)?.label || '🔁'}
+                            </span>
+                          )}
                         </div>
 
                         {task.deadline && (
@@ -383,6 +522,10 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
                   </div>
 
                   <input type="date" value={fDeadline} onChange={e => setFDeadline(e.target.value)} style={miniInputStyle} placeholder="Deadline (valfri)" />
+
+                  <select value={fRecur} onChange={e => setFRecur(e.target.value)} style={miniInputStyle}>
+                    {RECUR_OPTIONS.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+                  </select>
 
                   <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 5 }}>Tilldela</div>
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>

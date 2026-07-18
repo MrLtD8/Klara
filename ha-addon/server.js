@@ -641,35 +641,43 @@ async function runMailDigest() {
     ? `\nFamiljen har markerat dessa avsändare/nyckelord som EXTRA VIKTIGA — ta alltid med mail som matchar: ${vip.join(', ')}.`
     : '';
 
-  const prompt = `Du hjälper en barnfamilj att sortera sin mail. Här är de senaste mailen:
+  const prompt = `Du hjälper en barnfamilj att sortera sin mail. Idag är det ${todayStr()}. Här är de senaste mailen:
 
 ${mailList}
 
 Välj ut de VIKTIGASTE (max 6) — sådant som kräver handling eller är relevant för familjen: räkningar, skola/förskola, vård, myndigheter, samfällighet, bokningar, deadlines, privata mail från riktiga personer. Ignorera nyhetsbrev, reklam och kvitton på småköp.${vipHint}
 
+För varje viktigt mail, föreslå även om det passar som uppgift och/eller kalenderhändelse:
+- "uppgift": kort uppgiftstitel om mailet kräver en handling (t.ex. "Betala fakturan från samfälligheten"), annars tom sträng
+- "kalender": {"titel": "...", "datum": "YYYY-MM-DD"} om mailet nämner ett datum/möte/aktivitet, annars null
+
 Svara med ENDAST giltig JSON:
-{"viktiga": [{"index": 0, "sammanfattning": "en mening om vad mailet gäller", "atgard": "kort åtgärd eller tom sträng"}]}`;
+{"viktiga": [{"index": 0, "sammanfattning": "en mening om vad mailet gäller", "atgard": "kort åtgärd eller tom sträng", "uppgift": "", "kalender": null}]}`;
 
   const text = await callAI(prompt, { maxTokens: 800, json: true });
   const parsed = parseAiJson(text);
-  const toItem = (m, summary, action, isVip) => ({
+  const toItem = (m, v, isVip) => ({
     id: `mail_${m.account}_${m.uid}`,
     account: m.account,
     from: m.from,
     subject: m.subject,
     date: m.date,
-    summary: summary || '',
-    action: action || '',
+    summary: v?.sammanfattning || '',
+    action: v?.atgard || '',
     vip: !!isVip,
+    suggestTask: (v?.uppgift || '').trim(),
+    suggestEvent: (v?.kalender?.titel && /^\d{4}-\d{2}-\d{2}$/.test(v.kalender.datum || ''))
+      ? { title: v.kalender.titel, date: v.kalender.datum }
+      : null,
   });
 
   const picked = (parsed.viktiga || []).filter(v => candidates[v.index])
-    .map(v => toItem(candidates[v.index], v.sammanfattning, v.atgard, matchesList(candidates[v.index], vip)));
+    .map(v => toItem(candidates[v.index], v, matchesList(candidates[v.index], vip)));
 
   // Deterministisk garanti: VIP-mail som AI:n missade läggs alltid till överst
   const pickedIds = new Set(picked.map(p => p.id));
   const vipMissed = candidates.filter(m => matchesList(m, vip) && !pickedIds.has(`mail_${m.account}_${m.uid}`))
-    .map(m => toItem(m, '', '', true));
+    .map(m => toItem(m, null, true));
 
   const items = [...vipMissed, ...picked].sort((a, b) => (b.vip ? 1 : 0) - (a.vip ? 1 : 0)).slice(0, 10);
 

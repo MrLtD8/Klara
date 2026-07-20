@@ -1,5 +1,15 @@
 # Ändringslogg — Familjeapp
 
+## 1.14.0 (2026-07-20)
+
+### Mobilläge för Klara (lila designen)
+- Klara har nu en **responsiv mobilvy** precis som Familjen. På telefon (< 640px) blir sidomenyn en **utfällbar meny** som öppnas med hamburgerknappen i en topbar; menyn glider in över en mörkad bakgrund och stängs automatiskt när man valt en sida.
+- Topbaren visar aktuell sidas namn och olästa meddelanden.
+- Tidigare fick man alltid Familjen-designens mobilapp på telefon oavsett designval — nu respekterar mobilvyn vilken design man valt.
+- iPad och desktop är oförändrade (full sidomeny). `?desktop` / `?mobile` i URL:en tvingar respektive läge.
+
+---
+
 ## 1.13.1 (2026-07-18)
 
 ### Garderob: HEIC-stöd

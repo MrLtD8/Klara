@@ -33,6 +33,7 @@ export default function Sidebar({
   activePage, onNavigate, members, unreadCount,
   focus, showFocus, guestMode, onToggleGuest, visiblePages = {},
   collapsed = false, onToggleCollapse,
+  mobile = false, mobileOpen = false, onCloseMobile,
 }) {
   const [installedApps] = useLocalStorage('kl_extra_apps', []);
 
@@ -40,7 +41,9 @@ export default function Sidebar({
     item.alwaysOn || visiblePages[item.id]
   );
 
-  const W = collapsed ? 52 : 220;
+  // På mobil visas menyn alltid i fullbredd (aldrig ikonläge) och glider in/ut.
+  const isCollapsed = mobile ? false : collapsed;
+  const W = isCollapsed ? 52 : 220;
 
   return (
     <div style={{
@@ -53,13 +56,15 @@ export default function Sidebar({
       position: 'fixed',
       left: 0,
       top: 0,
-      zIndex: 100,
-      transition: 'width 0.2s ease, min-width 0.2s ease',
+      zIndex: mobile ? 300 : 100,
+      transition: mobile ? 'transform 0.25s ease' : 'width 0.2s ease, min-width 0.2s ease',
+      transform: mobile ? (mobileOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none',
+      boxShadow: mobile && mobileOpen ? '4px 0 24px rgba(0,0,0,0.35)' : 'none',
       overflow: 'hidden',
     }}>
       {/* Logo + collapse toggle */}
-      <div style={{ padding: collapsed ? '20px 8px 16px' : '20px 18px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, transition: 'padding 0.2s ease' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between' }}>
+      <div style={{ padding: isCollapsed ? '20px 8px 16px' : '20px 18px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, transition: 'padding 0.2s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 36, height: 36, borderRadius: 11,
@@ -67,14 +72,14 @@ export default function Sidebar({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: `0 4px 14px ${T.purple}55`,
               flexShrink: 0, cursor: 'pointer',
-            }} onClick={onToggleCollapse} title={collapsed ? 'Expandera meny' : 'Minimera meny'}>
+            }} onClick={mobile ? onCloseMobile : onToggleCollapse} title={mobile ? 'Stäng meny' : (isCollapsed ? 'Expandera meny' : 'Minimera meny')}>
               <span style={{ color: '#fff', fontWeight: 800, fontSize: 18, letterSpacing: '-0.5px', lineHeight: 1, paddingBottom: 1 }}>K</span>
-              {!collapsed && <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700, fontSize: 16, lineHeight: 1, marginLeft: 1 }}>.</span>}
+              {!isCollapsed && <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 700, fontSize: 16, lineHeight: 1, marginLeft: 1 }}>.</span>}
             </div>
-            {!collapsed && <span style={{ fontSize: 15, fontWeight: 700, color: '#FFFFFF', letterSpacing: '-0.2px' }}>Klara</span>}
+            {!isCollapsed && <span style={{ fontSize: 15, fontWeight: 700, color: '#FFFFFF', letterSpacing: '-0.2px' }}>Klara</span>}
           </div>
-          {!collapsed && (
-            <button onClick={onToggleCollapse} title="Minimera meny" style={{
+          {!isCollapsed && (
+            <button onClick={mobile ? onCloseMobile : onToggleCollapse} title={mobile ? 'Stäng meny' : 'Minimera meny'} style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               color: 'rgba(255,255,255,0.35)', padding: 4, borderRadius: 6,
               display: 'flex', alignItems: 'center', transition: 'color 0.15s',
@@ -89,7 +94,7 @@ export default function Sidebar({
       </div>
 
       {/* Nav items — scrollable middle */}
-      <nav style={{ flex: 1, padding: collapsed ? '10px 8px 0' : '10px 10px 0', overflowY: 'auto', transition: 'padding 0.2s ease' }}>
+      <nav style={{ flex: 1, padding: isCollapsed ? '10px 8px 0' : '10px 10px 0', overflowY: 'auto', transition: 'padding 0.2s ease' }}>
         {NAV_ITEMS.map(item => {
           const isActive  = activePage === item.id;
           const showBadge = item.id === 'meddelanden' && unreadCount > 0;
@@ -98,11 +103,11 @@ export default function Sidebar({
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              title={collapsed ? item.label : undefined}
+              title={isCollapsed ? item.label : undefined}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                width: '100%', padding: collapsed ? '9px 0' : '9px 11px', marginBottom: 2,
-                justifyContent: collapsed ? 'center' : 'flex-start',
+                width: '100%', padding: isCollapsed ? '9px 0' : '9px 11px', marginBottom: 2,
+                justifyContent: isCollapsed ? 'center' : 'flex-start',
                 background: isActive ? T.sidebarActive : 'transparent',
                 border: 'none', borderRadius: T.radiusSm, cursor: 'pointer',
                 color: isActive ? T.sidebarActiveText : T.sidebarText,
@@ -113,13 +118,13 @@ export default function Sidebar({
               onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
             >
               <Icon size={15} strokeWidth={isActive ? 2.2 : 1.7} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.72 }} />
-              {!collapsed && <span style={{ flex: 1 }}>{item.label}</span>}
-              {!collapsed && showBadge && (
+              {!isCollapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+              {!isCollapsed && showBadge && (
                 <span style={{ background: T.purple, color: '#fff', borderRadius: 999, fontSize: 10, fontWeight: 700, padding: '1px 6px', minWidth: 16, textAlign: 'center' }}>
                   {unreadCount}
                 </span>
               )}
-              {collapsed && showBadge && (
+              {isCollapsed && showBadge && (
                 <span style={{ position: 'absolute', top: 4, right: 4, background: T.purple, color: '#fff', borderRadius: 999, fontSize: 9, fontWeight: 700, padding: '1px 4px', minWidth: 14, textAlign: 'center' }}>
                   {unreadCount}
                 </span>
@@ -130,9 +135,9 @@ export default function Sidebar({
       </nav>
 
       {/* ── APPAR ─── */}
-      <div style={{ padding: collapsed ? '4px 8px 0' : '4px 10px 0', flexShrink: 0, transition: 'padding 0.2s ease' }}>
+      <div style={{ padding: isCollapsed ? '4px 8px 0' : '4px 10px 0', flexShrink: 0, transition: 'padding 0.2s ease' }}>
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8, marginBottom: 2 }}>
-          {!collapsed && (
+          {!isCollapsed && (
             <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.25)', letterSpacing: 1.2, textTransform: 'uppercase', padding: '4px 4px 6px' }}>
               Appar
             </div>
@@ -143,11 +148,11 @@ export default function Sidebar({
               <button
                 key={app.id}
                 onClick={() => onNavigate(`app:${app.id}`)}
-                title={collapsed ? app.name : undefined}
+                title={isCollapsed ? app.name : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  width: '100%', padding: collapsed ? '7px 0' : '7px 11px', marginBottom: 2,
-                  justifyContent: collapsed ? 'center' : 'flex-start',
+                  width: '100%', padding: isCollapsed ? '7px 0' : '7px 11px', marginBottom: 2,
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
                   background: isActive ? T.sidebarActive : 'transparent',
                   border: 'none', borderRadius: T.radiusSm, cursor: 'pointer',
                   color: isActive ? T.sidebarActiveText : T.sidebarText,
@@ -158,17 +163,17 @@ export default function Sidebar({
                 onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
               >
                 <span style={{ fontSize: 14, flexShrink: 0, opacity: isActive ? 1 : 0.8 }}>{app.icon}</span>
-                {!collapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.name}</span>}
+                {!isCollapsed && <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{app.name}</span>}
               </button>
             );
           })}
           <button
             onClick={() => onNavigate('appar')}
-            title={collapsed ? 'Hantera appar' : undefined}
+            title={isCollapsed ? 'Hantera appar' : undefined}
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
-              width: '100%', padding: collapsed ? '7px 0' : '7px 11px', marginBottom: 2,
-              justifyContent: collapsed ? 'center' : 'flex-start',
+              width: '100%', padding: isCollapsed ? '7px 0' : '7px 11px', marginBottom: 2,
+              justifyContent: isCollapsed ? 'center' : 'flex-start',
               background: activePage === 'appar' ? T.sidebarActive : 'transparent',
               border: 'none', borderRadius: T.radiusSm, cursor: 'pointer',
               color: activePage === 'appar' ? T.sidebarActiveText : T.sidebarText,
@@ -179,13 +184,13 @@ export default function Sidebar({
             onMouseLeave={e => { if (activePage !== 'appar') e.currentTarget.style.background = 'transparent'; }}
           >
             <Package size={14} strokeWidth={activePage === 'appar' ? 2.2 : 1.7} style={{ flexShrink: 0, opacity: activePage === 'appar' ? 1 : 0.65 }} />
-            {!collapsed && <><span style={{ flex: 1 }}>Hantera appar</span><Plus size={12} style={{ opacity: 0.5 }} /></>}
+            {!isCollapsed && <><span style={{ flex: 1 }}>Hantera appar</span><Plus size={12} style={{ opacity: 0.5 }} /></>}
           </button>
         </div>
       </div>
 
       {/* Dagens fokus — valfri, döljs i ikonläge */}
-      {!collapsed && showFocus && focus && (
+      {!isCollapsed && showFocus && focus && (
         <div style={{ padding: '10px 10px 0', flexShrink: 0 }}>
           <div style={{ background: T.sidebarHover, borderRadius: T.radiusSm, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: T.sidebarText, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
@@ -199,8 +204,8 @@ export default function Sidebar({
       )}
 
       {/* Bottom — knappar */}
-      <div style={{ padding: collapsed ? '8px 8px 10px' : '8px 10px 10px', borderTop: '1px solid rgba(255,255,255,0.07)', flexShrink: 0, transition: 'padding 0.2s ease' }}>
-        <div style={{ display: 'flex', flexDirection: collapsed ? 'column' : 'row', gap: 6 }}>
+      <div style={{ padding: isCollapsed ? '8px 8px 10px' : '8px 10px 10px', borderTop: '1px solid rgba(255,255,255,0.07)', flexShrink: 0, transition: 'padding 0.2s ease' }}>
+        <div style={{ display: 'flex', flexDirection: isCollapsed ? 'column' : 'row', gap: 6 }}>
           <button
             onClick={onToggleGuest}
             title={guestMode ? 'Stäng av gästläge' : 'Aktivera gästläge'}
@@ -215,7 +220,7 @@ export default function Sidebar({
             }}
           >
             <User size={13} strokeWidth={guestMode ? 2.2 : 1.7} />
-            {!collapsed && <span>Gäst</span>}
+            {!isCollapsed && <span>Gäst</span>}
           </button>
 
           <button
@@ -232,10 +237,10 @@ export default function Sidebar({
             }}
           >
             <Settings size={13} strokeWidth={activePage === 'installningar' ? 2.2 : 1.7} />
-            {!collapsed && <span>Inställningar</span>}
+            {!isCollapsed && <span>Inställningar</span>}
           </button>
 
-          {collapsed && (
+          {isCollapsed && (
             <button
               onClick={onToggleCollapse}
               title="Expandera meny"

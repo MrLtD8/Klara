@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { Menu } from 'lucide-react';
 import { useLocalStorage } from '../useLocalStorage';
+import { useIsMobile } from '../useIsMobile';
 import { T } from './theme';
 import Sidebar from './Sidebar';
 import KlaraOnboarding from './Onboarding';
@@ -92,10 +94,27 @@ const DEFAULT_VISIBLE = {
   medicin:       false,
 };
 
+// ─── Sidtitlar (mobil topbar) ─────────────────────────────────────────────────
+const PAGE_TITLES = {
+  hem: 'Hem', kalender: 'Kalender', uppgifter: 'Uppgifter', familj: 'Familj',
+  meddelanden: 'Meddelanden', filer: 'Filer & länkar', installningar: 'Inställningar',
+  kravdatabas: 'Kravdatabas', medicin: 'Medicin', bilhus: 'Bil & Hus', ekonomi: 'Ekonomi',
+  kids: 'Kids & Sysslor', listor: 'Listor', wellness: 'Wellness', assistent: 'Assistent',
+  automationer: 'Automationer', mail: 'Viktiga mail', garderob: 'Garderob', appar: 'Hantera appar',
+};
+
 // ─── Layout ───────────────────────────────────────────────────────────────────
 export default function KlaraLayout() {
   const [page, setPage] = useState('hem');
   const [guestMode, setGuestMode] = useState(false);
+  const widthMobile = useIsMobile();
+  // Samma override som index.js: ?desktop tvingar sidomeny, ?mobile tvingar drawer
+  const search = typeof window !== 'undefined' ? window.location.search : '';
+  const isMobile = search.includes('mobile') || (widthMobile && !search.includes('desktop'));
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Navigera + stäng menyn på mobil
+  const navigate = (p) => { setPage(p); if (isMobile) setDrawerOpen(false); };
 
   const [members,      setMembers]      = useLocalStorage('kl_members',      defaultMembers);
   const [tasks,        setTasks]        = useLocalStorage('kl_tasks',        defaultTasks);
@@ -118,7 +137,7 @@ export default function KlaraLayout() {
     setOnboardingDone(true);
   }
 
-  const commonProps = { members, tasks, events, onNavigate: setPage };
+  const commonProps = { members, tasks, events, onNavigate: navigate };
 
   function renderPage() {
     switch (page) {
@@ -128,7 +147,7 @@ export default function KlaraLayout() {
       case 'familj':       return <Familj members={members} setMembers={setMembers} tasks={tasks} events={events} />;
       case 'meddelanden':  return <Meddelanden messages={messages} setMessages={setMessages} members={members} />;
       case 'filer':        return <FilerLankar files={files} setFiles={setFiles} />;
-      case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} onNavigate={setPage} showFocus={showFocus} setShowFocus={setShowFocus} familyName={familyName} setFamilyName={setFamilyName} />;
+      case 'installningar':return <Installningar members={members} setMembers={setMembers} focus={focus} setFocus={setFocus} onNavigate={navigate} showFocus={showFocus} setShowFocus={setShowFocus} familyName={familyName} setFamilyName={setFamilyName} />;
       case 'kravdatabas':  return <KravDatabas />;
       case 'medicin':      return <Medicin members={members} guestMode={guestMode} />;
       case 'bilhus':       return <BilHus />;
@@ -151,12 +170,44 @@ export default function KlaraLayout() {
     }
   }
 
+  const pageTitle = PAGE_TITLES[page] || (page.startsWith('app:') ? 'App' : 'Klara');
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: T.bg, fontFamily: T.fontBody }}>
       {!onboardingDone && <KlaraOnboarding onDone={handleOnboardingDone} />}
+
+      {/* Mobil topbar med hamburgermeny */}
+      {isMobile && (
+        <header style={{
+          position: 'fixed', top: 0, left: 0, right: 0, height: 52, zIndex: 200,
+          background: T.sidebar, display: 'flex', alignItems: 'center', gap: 12,
+          padding: '0 14px', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+        }}>
+          <button onClick={() => setDrawerOpen(true)} title="Öppna meny" aria-label="Öppna meny" style={{
+            background: 'transparent', border: 'none', cursor: 'pointer', color: '#fff',
+            display: 'flex', alignItems: 'center', padding: 6, marginLeft: -6,
+          }}>
+            <Menu size={24} />
+          </button>
+          <span style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '-0.2px' }}>{pageTitle}</span>
+          {unreadCount > 0 && (
+            <span style={{ marginLeft: 'auto', background: T.purple, color: '#fff', borderRadius: 999, fontSize: 11, fontWeight: 700, padding: '2px 8px' }}>
+              {unreadCount}
+            </span>
+          )}
+        </header>
+      )}
+
+      {/* Backdrop bakom drawer på mobil */}
+      {isMobile && drawerOpen && (
+        <div onClick={() => setDrawerOpen(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 250, background: 'rgba(0,0,0,0.45)',
+        }} />
+      )}
+
       <Sidebar
         activePage={page}
-        onNavigate={setPage}
+        onNavigate={navigate}
         members={members}
         unreadCount={unreadCount}
         focus={focus}
@@ -166,12 +217,17 @@ export default function KlaraLayout() {
         visiblePages={visiblePages}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(c => !c)}
+        mobile={isMobile}
+        mobileOpen={drawerOpen}
+        onCloseMobile={() => setDrawerOpen(false)}
       />
       <main style={{
-        marginLeft: sidebarCollapsed ? 52 : 220,
+        marginLeft: isMobile ? 0 : (sidebarCollapsed ? 52 : 220),
+        marginTop: isMobile ? 52 : 0,
         transition: 'margin-left 0.2s ease',
         flex: 1,
         minHeight: '100vh',
+        width: isMobile ? '100%' : 'auto',
         background: T.bg,
         overflowY: 'auto',
       }}>

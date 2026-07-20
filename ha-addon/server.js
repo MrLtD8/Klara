@@ -645,17 +645,44 @@ async function runMailDigest() {
 
 ${mailList}
 
-Välj ut de VIKTIGASTE (max 6) — sådant som kräver handling eller är relevant för familjen: räkningar, skola/förskola, vård, myndigheter, samfällighet, bokningar, deadlines, privata mail från riktiga personer. Ignorera nyhetsbrev, reklam och kvitton på småköp.${vipHint}
+Välj ut de VIKTIGASTE (max 6) — sådant som kräver handling eller är relevant för familjen: räkningar, skola/förskola (t.ex. Unikum), vård, myndigheter, samfällighet, bokningar, deadlines, privata mail från riktiga personer. Ignorera nyhetsbrev, reklam och kvitton på småköp.${vipHint}
 
-För varje viktigt mail, föreslå även om det passar som uppgift och/eller kalenderhändelse:
-- "uppgift": kort uppgiftstitel om mailet kräver en handling (t.ex. "Betala fakturan från samfälligheten"), annars tom sträng
-- "kalender": {"titel": "...", "datum": "YYYY-MM-DD"} om mailet nämner ett datum/möte/aktivitet, annars null
+För varje viktigt mail: ge en lista "forslag" med 0-4 konkreta poster som hjälper familjen att förbereda sig. TÄNK ETT STEG LÄNGRE — en aktivitet kräver ofta förberedelse:
+- En utflykt → kalenderhändelse för utflykten OCH en uppgift "Packa matsäck".
+- En idrottsdag → uppgift "Ta med ombyte och vattenflaska".
+- En inlämning/läxa → uppgift att förbereda den, med deadline som datum.
+- Ett möte/utvecklingssamtal → kalenderhändelse på datumet.
+- En faktura → uppgift "Betala X" med förfallodatum.
+
+Varje förslag är antingen:
+- {"typ": "uppgift", "titel": "Packa matsäck till utflykten", "datum": "YYYY-MM-DD eller tom"}
+- {"typ": "kalender", "titel": "Utflykt till skogen", "datum": "YYYY-MM-DD"}
+Använd bara datum som tydligt framgår av mailet. Hoppa över förslag som inte är meningsfulla.
+
+EXEMPEL: ett mail "Klass 2B gör en utflykt fredag 24 augusti, ta med matsäck" ska ge:
+"forslag": [
+  {"typ": "kalender", "titel": "Utflykt med klass 2B", "datum": "2026-08-24"},
+  {"typ": "uppgift", "titel": "Packa matsäck till utflykten", "datum": "2026-08-24"}
+]
 
 Svara med ENDAST giltig JSON:
-{"viktiga": [{"index": 0, "sammanfattning": "en mening om vad mailet gäller", "atgard": "kort åtgärd eller tom sträng", "uppgift": "", "kalender": null}]}`;
+{"viktiga": [{"index": 0, "sammanfattning": "en mening om vad mailet gäller", "atgard": "kort sammanfattande åtgärd eller tom sträng", "forslag": [{"typ": "uppgift", "titel": "...", "datum": ""}]}]}`;
 
-  const text = await callAI(prompt, { maxTokens: 800, json: true });
+  const text = await callAI(prompt, { maxTokens: 1200, json: true });
   const parsed = parseAiJson(text);
+  const isDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+  const cleanSuggestions = (arr) => (Array.isArray(arr) ? arr : [])
+    .map(s => {
+      const titel = (s?.titel || '').trim();
+      if (!titel) return null;
+      const typ = s?.typ === 'kalender' ? 'event' : 'task';
+      const datum = isDate(s?.datum) ? s.datum : '';
+      if (typ === 'event' && !datum) return null; // kalenderhändelse kräver datum
+      return { type: typ, title: titel, date: datum };
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+
   const toItem = (m, v, isVip) => ({
     id: `mail_${m.account}_${m.uid}`,
     account: m.account,
@@ -665,10 +692,7 @@ Svara med ENDAST giltig JSON:
     summary: v?.sammanfattning || '',
     action: v?.atgard || '',
     vip: !!isVip,
-    suggestTask: (v?.uppgift || '').trim(),
-    suggestEvent: (v?.kalender?.titel && /^\d{4}-\d{2}-\d{2}$/.test(v.kalender.datum || ''))
-      ? { title: v.kalender.titel, date: v.kalender.datum }
-      : null,
+    suggestions: cleanSuggestions(v?.forslag),
   });
 
   const picked = (parsed.viktiga || []).filter(v => candidates[v.index])

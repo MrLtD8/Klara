@@ -1,5 +1,15 @@
 # Ändringslogg — Familjeapp
 
+## 1.15.0 (2026-07-20)
+
+### Smartare mailförslag (Assistent)
+- AI:n **tänker ett steg längre**: ett Unikum-mail om en utflykt ger nu både ett **kalenderinlägg** för utflykten OCH en **uppgift** "Packa matsäck" — plus andra förberedelser (ombyte, oömma kläder, betala faktura med förfallodatum).
+- Varje viktigt mail kan ge **flera förslag** (tidigare bara en uppgift + en händelse). Uppgifter får mailets datum som deadline.
+- Ny sektion **"Förslag från mail"** i Assistent-läget: samlar alla förslag från viktiga mail med ett klick för att lägga på tavlan eller i kalendern. Samma förslag visas även direkt på Mail-sidan.
+- Prompten har ett konkret exempel så även den lokala Ollama-modellen (llama3.2:3b) producerar bra förslag.
+
+---
+
 ## 1.14.0 (2026-07-20)
 
 ### Mobilläge för Klara (lila designen)

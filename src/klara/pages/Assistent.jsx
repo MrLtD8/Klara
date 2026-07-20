@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
+import { mailSuggestions, suggestionKey, buildTask, buildEvent } from '../mailSuggestions';
 
 export default function Assistent({ members = [] }) {
-  const [calEvents] = useLocalStorage('kl_cal_events', []);
+  const [calEvents, setCalEvents] = useLocalStorage('kl_cal_events', []);
   const [tasks, setTasks] = useLocalStorage('kl_tasks', []);
   const [medicins] = useLocalStorage('kl_medicin', []);
   const [carItems] = useLocalStorage('kl_car', []);
@@ -16,6 +17,41 @@ export default function Assistent({ members = [] }) {
   const [serverLoading, setServerLoading] = useState(false);
   const [serverError, setServerError] = useState('');
   const [addedSuggestions, setAddedSuggestions] = useState([]);
+
+  // ── Förslag från mail (skola/aktiviteter → uppgifter & kalender) ──
+  const [mailDigest, setMailDigest] = useState(null);
+  const [mailChecking, setMailChecking] = useState(false);
+  const [mailError, setMailError] = useState('');
+  const [addedMail, setAddedMail] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/mail/digest').then(r => r.json()).then(setMailDigest).catch(() => {});
+  }, []);
+
+  async function refreshMail() {
+    setMailChecking(true);
+    setMailError('');
+    try {
+      const res = await fetch('/api/mail/check', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setMailDigest(data);
+    } catch (e) {
+      setMailError(e.message);
+    }
+    setMailChecking(false);
+  }
+
+  function acceptMailSuggestion(mail, sugg, key) {
+    if (sugg.type === 'event') setCalEvents(prev => [...prev, buildEvent(sugg)]);
+    else setTasks(prev => [...prev, buildTask(sugg, mail)]);
+    setAddedMail(a => [...a, key]);
+  }
+
+  // Alla förslag från alla viktiga mail, plattade med sitt källmail
+  const mailProposals = (mailDigest?.items || []).flatMap(mail =>
+    mailSuggestions(mail).map((s, si) => ({ mail, sugg: s, key: suggestionKey(mail.id, s, si) }))
+  );
 
   // AI-dagsrapport från HA-addonet — nyckeln ligger på servern, inte i webbläsaren
   async function fetchServerReport() {
@@ -166,6 +202,62 @@ export default function Assistent({ members = [] }) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Förslag från mail (aktiviteter → uppgifter & kalender) ── */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 24, boxShadow: T.shadow, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 22 }}>📬</span>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: T.text }}>Förslag från mail</h2>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: T.textMuted }}>
+              AI:n läser viktiga mail (t.ex. Unikum) och föreslår uppgifter och kalenderinlägg — inkl. förberedelser som matsäck till utflykter
+            </p>
+          </div>
+          <button onClick={refreshMail} disabled={mailChecking}
+            style={{ padding: '9px 18px', borderRadius: T.radiusSm, border: 'none', background: T.purple, color: '#fff', fontSize: 14, fontWeight: 700, cursor: mailChecking ? 'wait' : 'pointer', opacity: mailChecking ? 0.7 : 1 }}>
+            {mailChecking ? 'Läser mail…' : 'Skanna mail'}
+          </button>
+        </div>
+
+        {mailError && (
+          <div style={{ padding: '10px 14px', borderRadius: T.radiusSm, background: '#FEE2E2', color: '#B91C1C', fontSize: 13 }}>{mailError}</div>
+        )}
+
+        {!mailError && mailProposals.length === 0 && (
+          <p style={{ margin: 0, fontSize: 13, color: T.textMuted, fontStyle: 'italic' }}>
+            {mailDigest ? 'Inga förslag just nu. Klicka "Skanna mail" för att leta efter aktiviteter och att-göra.' : 'Mailkonton ställs in i addonets konfiguration. Klicka "Skanna mail" för att börja.'}
+          </p>
+        )}
+
+        {mailProposals.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {mailProposals.map(({ mail, sugg, key }) => {
+              const done = addedMail.includes(key);
+              const isEvent = sugg.type === 'event';
+              return (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: T.radiusSm, background: T.bg, border: `1px solid ${T.border}` }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>{isEvent ? '📅' : '✅'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>
+                      {sugg.title}{isEvent && sugg.date ? <span style={{ color: T.textMuted, fontWeight: 400 }}> · {sugg.date}</span> : ''}
+                    </div>
+                    <div style={{ fontSize: 11, color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {isEvent ? 'Kalender' : 'Uppgift'} · från "{mail.subject}"
+                    </div>
+                  </div>
+                  <button onClick={() => !done && acceptMailSuggestion(mail, sugg, key)} disabled={done}
+                    style={{ flexShrink: 0, padding: '6px 14px', borderRadius: T.radiusSm, border: 'none',
+                      background: done ? T.bg : (isEvent ? '#DBEAFE' : T.purpleLight),
+                      color: done ? '#16A34A' : (isEvent ? '#1E40AF' : T.purple),
+                      fontSize: 12, fontWeight: 700, cursor: done ? 'default' : 'pointer' }}>
+                    {done ? 'Tillagd ✓' : (isEvent ? '+ Kalender' : '+ Tavlan')}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

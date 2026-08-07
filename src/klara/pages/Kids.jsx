@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
+import { fileToDownscaledJpeg } from '../../imageUtil';
 
 // ─── Levels (baserat på totalt intjänade stjärnor) ────────────────────────────
 const LEVELS = [
@@ -128,6 +129,16 @@ export default function Kids({ members = [] }) {
   const [newRewardCost, setNewRewardCost] = useState(30);
   const [newRewardIcon, setNewRewardIcon] = useState('🎁');
   const [newRewardDesc, setNewRewardDesc] = useState('');
+  const [newRewardImage,setNewRewardImage]= useState('');
+  const newRewardFileRef = useRef(null);
+  // Reward edit (redigera befintlig belöning utan att ta bort den)
+  const [editReward,     setEditReward]     = useState(null); // reward-id eller null
+  const [edTitle,        setEdTitle]         = useState('');
+  const [edCost,         setEdCost]          = useState(30);
+  const [edIcon,         setEdIcon]          = useState('🎁');
+  const [edDesc,         setEdDesc]          = useState('');
+  const [edImage,        setEdImage]         = useState('');
+  const edRewardFileRef  = useRef(null);
   // Activity form
   const [newActivity,   setNewActivity]   = useState('');
 
@@ -206,8 +217,26 @@ export default function Kids({ members = [] }) {
 
   function addReward() {
     if (!newReward.trim()) return;
-    setRewards(prev => [...prev, { id: 'r_' + Date.now(), title: newReward.trim(), cost: Number(newRewardCost), icon: newRewardIcon, desc: newRewardDesc.trim() }]);
-    setNewReward(''); setNewRewardCost(30); setNewRewardIcon('🎁'); setNewRewardDesc('');
+    setRewards(prev => [...prev, { id: 'r_' + Date.now(), title: newReward.trim(), cost: Number(newRewardCost), icon: newRewardIcon, desc: newRewardDesc.trim(), image: newRewardImage }]);
+    setNewReward(''); setNewRewardCost(30); setNewRewardIcon('🎁'); setNewRewardDesc(''); setNewRewardImage('');
+  }
+
+  function startEditReward(r) {
+    setEditReward(r.id);
+    setEdTitle(r.title); setEdCost(r.cost); setEdIcon(r.icon || '🎁'); setEdDesc(r.desc || ''); setEdImage(r.image || '');
+  }
+  function saveEditReward() {
+    if (!edTitle.trim()) return;
+    setRewards(prev => prev.map(r => r.id === editReward
+      ? { ...r, title: edTitle.trim(), cost: Number(edCost), icon: edIcon, desc: edDesc.trim(), image: edImage }
+      : r));
+    setEditReward(null);
+  }
+  async function pickImage(e, setter) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try { setter(await fileToDownscaledJpeg(file, 200)); } catch { /* ignorera trasig bild */ }
   }
 
   // ── Wheel ────────────────────────────────────────────────────────────────────
@@ -516,35 +545,72 @@ export default function Kids({ members = [] }) {
           {/* Reward cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 16, marginBottom: 24 }}>
             {rewards.map(reward => (
-              <div key={reward.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 20, boxShadow: T.shadow, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ fontSize: 44, textAlign: 'center', marginBottom: 10 }}>{reward.icon}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: T.text, textAlign: 'center', marginBottom: 6 }}>{reward.title}</div>
-                {reward.desc && <div style={{ fontSize: 12, color: T.textMuted, textAlign: 'center', marginBottom: 12, lineHeight: 1.5 }}>{reward.desc}</div>}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#FFF7ED', borderRadius: T.radiusSm, padding: '8px', marginBottom: 14 }}>
-                  <span style={{ fontSize: 18 }}>⭐</span>
-                  <span style={{ fontSize: 22, fontWeight: 800, color: '#F97316' }}>{reward.cost}</span>
-                  <span style={{ fontSize: 12, color: T.textMuted }}>stjärnor</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 'auto' }}>
-                  {kids.map(kid => {
-                    const data = kd(kid.id);
-                    const can  = (data.stars || 0) >= reward.cost;
-                    return (
-                      <button key={kid.id} onClick={() => can && redeemReward(kid.id, reward)} style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '8px 12px', border: 'none', borderRadius: T.radiusSm,
-                        background: can ? T.purple : T.border, color: can ? '#fff' : T.textMuted,
-                        fontSize: 13, fontWeight: 600, cursor: can ? 'pointer' : 'not-allowed',
-                        opacity: can ? 1 : 0.55, transition: 'all 0.15s',
-                      }}>
-                        <span>{kid.name} löser in</span>
-                        <span style={{ fontSize: 11 }}>({data.stars || 0} ⭐)</span>
-                      </button>
-                    );
-                  })}
-                  {kids.length === 0 && <div style={{ fontSize: 12, color: T.textMuted, textAlign: 'center' }}>Inga barn</div>}
-                </div>
-                <button onClick={() => setRewards(p => p.filter(r => r.id !== reward.id))} style={{ marginTop: 10, background: 'none', border: 'none', color: T.textMuted, fontSize: 12, cursor: 'pointer' }}>Ta bort</button>
+              <div key={reward.id} style={{ background: T.card, border: `1px solid ${editReward === reward.id ? T.purple : T.border}`, borderRadius: T.radius, padding: 20, boxShadow: T.shadow, display: 'flex', flexDirection: 'column' }}>
+                {editReward === reward.id ? (
+                  /* ── Redigeringsläge ── */
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      {edImage
+                        ? <img src={edImage} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 12, border: `1px solid ${T.border}` }} />
+                        : <input value={edIcon} onChange={e => setEdIcon(e.target.value)} style={{ ...inp, width: 56, textAlign: 'center', fontSize: 26, marginBottom: 0 }} />}
+                      <input ref={edRewardFileRef} type="file" accept="image/*,.heic,.heif" onChange={e => pickImage(e, setEdImage)} style={{ display: 'none' }} />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => edRewardFileRef.current?.click()} style={{ background: T.purpleLight, color: T.purple, border: 'none', borderRadius: T.radiusSm, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                          {edImage ? '🖼️ Byt bild' : '🖼️ Lägg till bild'}
+                        </button>
+                        {edImage && <button onClick={() => setEdImage('')} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.textMuted, borderRadius: T.radiusSm, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>Ta bort bild</button>}
+                      </div>
+                    </div>
+                    <input value={edTitle} onChange={e => setEdTitle(e.target.value)} placeholder="Namn" style={{ ...inp, textAlign: 'center', fontWeight: 700 }} />
+                    <input value={edDesc} onChange={e => setEdDesc(e.target.value)} placeholder="Beskrivning (valfri)" style={inp} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#FFF7ED', borderRadius: T.radiusSm, padding: '8px', marginBottom: 14 }}>
+                      <span style={{ fontSize: 18 }}>⭐</span>
+                      <input type="number" min="1" value={edCost} onChange={e => setEdCost(e.target.value)} style={{ width: 60, border: 'none', background: 'transparent', fontSize: 20, fontWeight: 800, color: '#F97316', outline: 'none', textAlign: 'center' }} />
+                      <span style={{ fontSize: 12, color: T.textMuted }}>stjärnor</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+                      <button onClick={saveEditReward} style={{ flex: 1, background: T.purple, color: '#fff', border: 'none', borderRadius: T.radiusSm, padding: '9px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Spara</button>
+                      <button onClick={() => setEditReward(null)} style={{ background: T.bg, color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: '9px 14px', fontSize: 13, cursor: 'pointer' }}>Avbryt</button>
+                    </div>
+                  </>
+                ) : (
+                  /* ── Visningsläge ── */
+                  <>
+                    {reward.image
+                      ? <img src={reward.image} alt={reward.title} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 12, alignSelf: 'center', marginBottom: 10, border: `1px solid ${T.border}` }} />
+                      : <div style={{ fontSize: 44, textAlign: 'center', marginBottom: 10 }}>{reward.icon}</div>}
+                    <div style={{ fontSize: 15, fontWeight: 700, color: T.text, textAlign: 'center', marginBottom: 6 }}>{reward.title}</div>
+                    {reward.desc && <div style={{ fontSize: 12, color: T.textMuted, textAlign: 'center', marginBottom: 12, lineHeight: 1.5 }}>{reward.desc}</div>}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#FFF7ED', borderRadius: T.radiusSm, padding: '8px', marginBottom: 14 }}>
+                      <span style={{ fontSize: 18 }}>⭐</span>
+                      <span style={{ fontSize: 22, fontWeight: 800, color: '#F97316' }}>{reward.cost}</span>
+                      <span style={{ fontSize: 12, color: T.textMuted }}>stjärnor</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 'auto' }}>
+                      {kids.map(kid => {
+                        const data = kd(kid.id);
+                        const can  = (data.stars || 0) >= reward.cost;
+                        return (
+                          <button key={kid.id} onClick={() => can && redeemReward(kid.id, reward)} style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '8px 12px', border: 'none', borderRadius: T.radiusSm,
+                            background: can ? T.purple : T.border, color: can ? '#fff' : T.textMuted,
+                            fontSize: 13, fontWeight: 600, cursor: can ? 'pointer' : 'not-allowed',
+                            opacity: can ? 1 : 0.55, transition: 'all 0.15s',
+                          }}>
+                            <span>{kid.name} löser in</span>
+                            <span style={{ fontSize: 11 }}>({data.stars || 0} ⭐)</span>
+                          </button>
+                        );
+                      })}
+                      {kids.length === 0 && <div style={{ fontSize: 12, color: T.textMuted, textAlign: 'center' }}>Inga barn</div>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 10 }}>
+                      <button onClick={() => startEditReward(reward)} style={{ background: 'none', border: 'none', color: T.purple, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>✏️ Redigera</button>
+                      <button onClick={() => setRewards(p => p.filter(r => r.id !== reward.id))} style={{ background: 'none', border: 'none', color: T.textMuted, fontSize: 12, cursor: 'pointer' }}>Ta bort</button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -553,7 +619,16 @@ export default function Kids({ members = [] }) {
           <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 20, boxShadow: T.shadow }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 12 }}>+ Ny belöning</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <input value={newRewardIcon} onChange={e => setNewRewardIcon(e.target.value)} style={{ ...inp, width: 48, textAlign: 'center', fontSize: 18 }} />
+              {/* Bild eller emoji */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                {newRewardImage
+                  ? <img src={newRewardImage} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 10, border: `1px solid ${T.border}` }} />
+                  : <input value={newRewardIcon} onChange={e => setNewRewardIcon(e.target.value)} style={{ ...inp, width: 48, textAlign: 'center', fontSize: 18, marginBottom: 0 }} />}
+                <input ref={newRewardFileRef} type="file" accept="image/*,.heic,.heif" onChange={e => pickImage(e, setNewRewardImage)} style={{ display: 'none' }} />
+                <button onClick={() => newRewardImage ? setNewRewardImage('') : newRewardFileRef.current?.click()} style={{ background: 'none', border: 'none', color: T.purple, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+                  {newRewardImage ? 'Ta bort bild' : '🖼️ Bild'}
+                </button>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 2, minWidth: 160 }}>
                 <input value={newReward} onChange={e => setNewReward(e.target.value)} placeholder="Belöningens namn..." style={inp} />
                 <input value={newRewardDesc} onChange={e => setNewRewardDesc(e.target.value)} placeholder="Beskrivning (valfri)..." style={inp} />

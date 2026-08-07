@@ -1,5 +1,13 @@
 # Ändringslogg — Familjeapp
 
+## 1.16.0 (2026-08-07)
+
+### Kids & Belöningar
+- **Redigera belöningar** utan att ta bort dem: klicka ✏️ Redigera på ett belöningskort för att justera stjärnkostnad, namn, beskrivning och ikon direkt.
+- **Bilder på belöningar**: lägg till ett eget foto/logga (t.ex. bild på glassen eller biologotypen) i stället för emoji. Bilden skalas ner automatiskt och fungerar även med iPhone-HEIC.
+
+---
+
 ## 1.15.0 (2026-07-20)
 
 ### Smartare mailförslag (Assistent)

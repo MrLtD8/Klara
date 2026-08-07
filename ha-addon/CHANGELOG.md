@@ -1,5 +1,13 @@
 # Ändringslogg — Familjeapp
 
+## 1.17.0 (2026-08-07)
+
+### Kids: sysslor kan redigeras och få bilder
+- **Redigera sysslor** (inte bara ta bort): klicka ✏️ på en syssla för att ändra namn, stjärnor, ikon/bild och återställningsintervall.
+- **Bildväljare per syssla**: välj bland en palett med färdiga ikoner (😀 Ikon) eller ladda upp en egen liten bild (🖼️ Bild). Bilden visas i barnets sysslolista. Fungerar även med iPhone-HEIC.
+
+---
+
 ## 1.16.0 (2026-08-07)
 
 ### Kids & Belöningar

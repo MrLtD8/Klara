@@ -38,6 +38,13 @@ const DEFAULT_CHORES = [
   { id: 'ch8', title: 'Läsa 30 min',        stars: 10, icon: '📚', resetEvery: 'dag'   },
 ];
 
+// Färdiga ikoner att välja bland för sysslor (klickas i väljaren)
+const CHORE_ICONS = [
+  '🍽️','🧹','🗑️','🐾','🍴','🛏️','👨‍🍳','📚','🧺','🧼','🚿','🪥',
+  '🌱','🐕','🐈','♻️','🧦','👕','🪣','🧽','🍳','🚗','🎒','🧸',
+  '💧','🌿','🧴','🪴','📖','⚽','🎨','🎵',
+];
+
 const DEFAULT_REWARDS = [
   { id: 'r1', title: 'Extra skärmtid 30 min', cost: 20,  icon: '📱', desc: 'Extra tid med tablet/TV' },
   { id: 'r2', title: 'Välj middagen',          cost: 30,  icon: '🍕', desc: 'Du bestämmer vad vi äter' },
@@ -123,7 +130,18 @@ export default function Kids({ members = [] }) {
   const [newChore,      setNewChore]      = useState('');
   const [newChoreStars, setNewChoreStars] = useState(10);
   const [newChoreIcon,  setNewChoreIcon]  = useState('⭐');
+  const [newChoreImage, setNewChoreImage] = useState('');
   const [newChoreReset, setNewChoreReset] = useState('dag');
+  const [showChoreIcons, setShowChoreIcons] = useState(false);
+  const newChoreFileRef = useRef(null);
+  // Chore edit (redigera befintlig syssla)
+  const [editChore,      setEditChore]      = useState(null); // chore-id eller null
+  const [edcTitle,       setEdcTitle]        = useState('');
+  const [edcStars,       setEdcStars]        = useState(10);
+  const [edcIcon,        setEdcIcon]         = useState('⭐');
+  const [edcImage,       setEdcImage]        = useState('');
+  const [edcReset,       setEdcReset]        = useState('dag');
+  const edChoreFileRef   = useRef(null);
   // Reward form
   const [newReward,     setNewReward]     = useState('');
   const [newRewardCost, setNewRewardCost] = useState(30);
@@ -191,8 +209,20 @@ export default function Kids({ members = [] }) {
 
   function addChore() {
     if (!newChore.trim()) return;
-    setChores(prev => [...prev, { id: 'ch_' + Date.now(), title: newChore.trim(), stars: Number(newChoreStars), icon: newChoreIcon, resetEvery: newChoreReset }]);
-    setNewChore(''); setNewChoreStars(10); setNewChoreIcon('⭐'); setNewChoreReset('dag');
+    setChores(prev => [...prev, { id: 'ch_' + Date.now(), title: newChore.trim(), stars: Number(newChoreStars), icon: newChoreIcon, image: newChoreImage, resetEvery: newChoreReset }]);
+    setNewChore(''); setNewChoreStars(10); setNewChoreIcon('⭐'); setNewChoreImage(''); setNewChoreReset('dag'); setShowChoreIcons(false);
+  }
+
+  function startEditChore(c) {
+    setEditChore(c.id);
+    setEdcTitle(c.title); setEdcStars(c.stars); setEdcIcon(c.icon || '⭐'); setEdcImage(c.image || ''); setEdcReset(c.resetEvery || 'dag');
+  }
+  function saveEditChore() {
+    if (!edcTitle.trim()) return;
+    setChores(prev => prev.map(c => c.id === editChore
+      ? { ...c, title: edcTitle.trim(), stars: Number(edcStars), icon: edcIcon, image: edcImage, resetEvery: edcReset }
+      : c));
+    setEditChore(null);
   }
 
   // ── Rewards ──────────────────────────────────────────────────────────────────
@@ -394,7 +424,9 @@ export default function Kids({ members = [] }) {
                                 }}>
                                   {checked && <span style={{ color: '#fff', fontSize: 14, fontWeight: 900, lineHeight: 1 }}>✓</span>}
                                 </div>
-                                <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{chore.icon || '⭐'}</span>
+                                {chore.image
+                                  ? <img src={chore.image} alt="" style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 7, flexShrink: 0, border: `1px solid ${T.border}` }} />
+                                  : <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>{chore.icon || '⭐'}</span>}
                                 <div style={{ flex: 1 }}>
                                   <div style={{ fontSize: 14, fontWeight: 500, color: T.text, textDecoration: checked ? 'line-through' : 'none', opacity: checked ? 0.6 : 1 }}>
                                     {chore.title}
@@ -419,7 +451,17 @@ export default function Kids({ members = [] }) {
                       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 16, marginTop: 16, boxShadow: T.shadow }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: T.textMuted, marginBottom: 10 }}>+ Ny syssla</div>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                          <input value={newChoreIcon} onChange={e => setNewChoreIcon(e.target.value)} style={{ ...inp, width: 48, textAlign: 'center', fontSize: 18 }} />
+                          {/* Bild eller emoji */}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                            {newChoreImage
+                              ? <img src={newChoreImage} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 9, border: `1px solid ${T.border}` }} />
+                              : <input value={newChoreIcon} onChange={e => setNewChoreIcon(e.target.value)} style={{ ...inp, width: 44, textAlign: 'center', fontSize: 18, marginBottom: 0 }} />}
+                            <input ref={newChoreFileRef} type="file" accept="image/*,.heic,.heif" onChange={e => pickImage(e, setNewChoreImage)} style={{ display: 'none' }} />
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button onClick={() => setShowChoreIcons(s => !s)} title="Välj ikon" style={{ background: 'none', border: 'none', color: T.purple, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>😀 Ikon</button>
+                              <button onClick={() => newChoreImage ? setNewChoreImage('') : newChoreFileRef.current?.click()} title="Egen bild" style={{ background: 'none', border: 'none', color: T.purple, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>{newChoreImage ? '✕ Bild' : '🖼️ Bild'}</button>
+                            </div>
+                          </div>
                           <input value={newChore} onChange={e => setNewChore(e.target.value)} onKeyDown={e => e.key === 'Enter' && addChore()} placeholder="Sysslans namn..." style={{ ...inp, flex: 1, minWidth: 140 }} />
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.purpleLight, borderRadius: T.radiusSm, padding: '6px 10px' }}>
                             <span>⭐</span>
@@ -430,16 +472,67 @@ export default function Kids({ members = [] }) {
                           </select>
                           <button onClick={addChore} style={{ background: T.purple, color: '#fff', border: 'none', borderRadius: T.radiusSm, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Lägg till</button>
                         </div>
-                        {/* Existing chores list with delete */}
+
+                        {/* Ikon-palett (färdiga bilder) */}
+                        {showChoreIcons && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10, padding: 10, background: T.bg, borderRadius: T.radiusSm }}>
+                            {CHORE_ICONS.map(ic => (
+                              <button key={ic} onClick={() => { setNewChoreIcon(ic); setNewChoreImage(''); setShowChoreIcons(false); }}
+                                style={{ fontSize: 20, background: newChoreIcon === ic ? T.purpleLight : 'transparent', border: `1px solid ${newChoreIcon === ic ? T.purple : 'transparent'}`, borderRadius: 8, padding: '4px 6px', cursor: 'pointer', lineHeight: 1 }}>
+                                {ic}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Befintliga sysslor — redigera / ta bort */}
                         {chores.length > 0 && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
                             {chores.map(c => (
-                              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 20, padding: '4px 12px', fontSize: 12 }}>
-                                <span>{c.icon}</span> {c.title}
+                              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 20, padding: '4px 10px', fontSize: 12 }}>
+                                {c.image
+                                  ? <img src={c.image} alt="" style={{ width: 18, height: 18, objectFit: 'cover', borderRadius: 5 }} />
+                                  : <span>{c.icon}</span>} {c.title}
                                 <span style={{ color: T.purple, fontWeight: 700 }}>⭐{c.stars}</span>
-                                <button onClick={() => setChores(p => p.filter(ch => ch.id !== c.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, fontSize: 14, padding: 0 }}>×</button>
+                                <button onClick={() => startEditChore(c)} title="Redigera" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.purple, fontSize: 12, padding: 0 }}>✏️</button>
+                                <button onClick={() => setChores(p => p.filter(ch => ch.id !== c.id))} title="Ta bort" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, fontSize: 14, padding: 0 }}>×</button>
                               </div>
                             ))}
+                          </div>
+                        )}
+
+                        {/* Redigera syssla — inline-panel */}
+                        {editChore && (
+                          <div style={{ marginTop: 14, padding: 14, background: T.bg, borderRadius: T.radiusSm, border: `1.5px solid ${T.purple}` }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 10 }}>✏️ Redigera syssla</div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                                {edcImage
+                                  ? <img src={edcImage} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 9, border: `1px solid ${T.border}` }} />
+                                  : <input value={edcIcon} onChange={e => setEdcIcon(e.target.value)} style={{ ...inp, width: 44, textAlign: 'center', fontSize: 18, marginBottom: 0 }} />}
+                                <input ref={edChoreFileRef} type="file" accept="image/*,.heic,.heif" onChange={e => pickImage(e, setEdcImage)} style={{ display: 'none' }} />
+                                <button onClick={() => edcImage ? setEdcImage('') : edChoreFileRef.current?.click()} style={{ background: 'none', border: 'none', color: T.purple, fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>{edcImage ? '✕ Bild' : '🖼️ Bild'}</button>
+                              </div>
+                              <input value={edcTitle} onChange={e => setEdcTitle(e.target.value)} placeholder="Sysslans namn..." style={{ ...inp, flex: 1, minWidth: 140, marginBottom: 0 }} />
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.purpleLight, borderRadius: T.radiusSm, padding: '6px 10px' }}>
+                                <span>⭐</span>
+                                <input type="number" min="1" value={edcStars} onChange={e => setEdcStars(e.target.value)} style={{ width: 44, border: 'none', background: 'transparent', fontSize: 14, fontWeight: 700, color: T.purple, outline: 'none' }} />
+                              </div>
+                              <select value={edcReset} onChange={e => setEdcReset(e.target.value)} style={{ ...inp, fontSize: 12, marginBottom: 0 }}>
+                                {RESET_OPTIONS.map(r => <option key={r.val} value={r.val}>{r.label}</option>)}
+                              </select>
+                              <button onClick={saveEditChore} style={{ background: T.purple, color: '#fff', border: 'none', borderRadius: T.radiusSm, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Spara</button>
+                              <button onClick={() => setEditChore(null)} style={{ background: 'none', color: T.textMuted, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}>Avbryt</button>
+                            </div>
+                            {/* Ikon-palett i redigering */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10 }}>
+                              {CHORE_ICONS.map(ic => (
+                                <button key={ic} onClick={() => { setEdcIcon(ic); setEdcImage(''); }}
+                                  style={{ fontSize: 18, background: !edcImage && edcIcon === ic ? T.purpleLight : 'transparent', border: `1px solid ${!edcImage && edcIcon === ic ? T.purple : 'transparent'}`, borderRadius: 7, padding: '3px 5px', cursor: 'pointer', lineHeight: 1 }}>
+                                  {ic}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

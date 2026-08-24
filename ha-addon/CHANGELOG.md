@@ -1,5 +1,18 @@
 # Ändringslogg — Familjeapp
 
+## 1.19.0 (2026-08-24)
+
+### Rutiner — ny app för barnens morgon och kväll
+- **Morgon ☀️ och Kväll 🌙** med varsin bildlista: borsta tänder, klä på sig, packa väskan, pyjamas, läsa saga … Appen öppnas automatiskt i rätt läge (kväll efter kl 16).
+- **Tryck på ＋** för att lägga till varje barn med eget namn och djur-avatar (16 djur att välja på).
+- **Stora tryckytor** med bild, tydlig bock och ett litet "ding" när man trycker.
+- **Progressbar + kompis-figur** som blir gladare ju fler rutor som är klara (😴 → 🙂 → 😃 → 🤩 → 🥳).
+- **Konfetti och fanfar** när hela listan är klar för dagen.
+- **Sparas automatiskt** och nollställs varje ny dag. Rutinlistorna kan redigeras — lägg till egna som "Ta med gympapåse".
+- Aktiveras i **Hantera appar → Rutiner**.
+
+---
+
 ## 1.18.0 (2026-08-24)
 
 ### Justera stjärnsaldot (Kids & Sysslor)

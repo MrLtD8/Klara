@@ -24,6 +24,7 @@ import Appar from './pages/Appar';
 import Automationer from './pages/Automationer';
 import MailPage from './pages/Mail';
 import Garderob from './pages/Garderob';
+import Rutiner from './pages/Rutiner';
 
 // ─── Hjälpfunktion för datum ─────────────────────────────────────────────────
 function daysFromNow(n) {
@@ -88,6 +89,7 @@ const DEFAULT_VISIBLE = {
   automationer:  false,
   mail:          false,
   garderob:      false,
+  rutiner:       false,
   kravdatabas:   false,
   meddelanden:   false,
   familj:        false,
@@ -100,7 +102,8 @@ const PAGE_TITLES = {
   meddelanden: 'Meddelanden', filer: 'Filer & länkar', installningar: 'Inställningar',
   kravdatabas: 'Kravdatabas', medicin: 'Medicin', bilhus: 'Bil & Hus', ekonomi: 'Ekonomi',
   kids: 'Kids & Sysslor', listor: 'Listor', wellness: 'Wellness', assistent: 'Assistent',
-  automationer: 'Automationer', mail: 'Viktiga mail', garderob: 'Garderob', appar: 'Hantera appar',
+  automationer: 'Automationer', mail: 'Viktiga mail', garderob: 'Garderob',
+  rutiner: 'Rutiner', appar: 'Hantera appar',
 };
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
@@ -156,6 +159,7 @@ export default function KlaraLayout() {
       case 'automationer': return <Automationer members={members} />;
       case 'mail':         return <MailPage />;
       case 'garderob':     return <Garderob members={members} />;
+      case 'rutiner':      return <Rutiner />;
       case 'appar':        return <Appar members={members} tasks={tasks} events={events} visiblePages={visiblePages} setVisiblePages={setVisiblePages} />;
       default: {
         // Installerade extra-appar: 'app:custom_123'

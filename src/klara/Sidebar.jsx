@@ -4,7 +4,7 @@ import {
   Home, Calendar, CheckSquare, FolderOpen,
   Wrench, Wallet, Star, List, Heart, Bot, BarChart2,
   Users, MessageCircle, Pill, Settings, User, Package, Plus,
-  ChevronLeft, ChevronRight, Zap, Mail, Shirt,
+  ChevronLeft, ChevronRight, Zap, Mail, Shirt, Sunrise,
 } from 'lucide-react';
 import { useLocalStorage } from '../useLocalStorage';
 
@@ -22,6 +22,7 @@ const ALL_NAV_ITEMS = [
   { id: 'automationer',label: 'Automationer',     Icon: Zap },
   { id: 'mail',        label: 'Viktiga mail',     Icon: Mail },
   { id: 'garderob',    label: 'Garderob',         Icon: Shirt },
+  { id: 'rutiner',     label: 'Rutiner',          Icon: Sunrise },
   { id: 'kravdatabas', label: 'Kravdatabas',     Icon: BarChart2 },
   // Dolda som standard
   { id: 'familj',      label: 'Familj',          Icon: Users },

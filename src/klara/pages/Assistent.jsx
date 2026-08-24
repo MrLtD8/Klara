@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
+import { useIsMobile } from '../../useIsMobile';
 import { mailSuggestions, suggestionKey, buildTask, buildEvent } from '../mailSuggestions';
 
 export default function Assistent({ members = [] }) {
+  const isMobile = useIsMobile();
   const [calEvents, setCalEvents] = useLocalStorage('kl_cal_events', []);
   const [tasks, setTasks] = useLocalStorage('kl_tasks', []);
   const [medicins] = useLocalStorage('kl_medicin', []);
@@ -262,7 +264,7 @@ export default function Assistent({ members = [] }) {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 16 : 24 }}>
         {/* Dagsrapport */}
         <div>
           <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: 24, boxShadow: T.shadow, marginBottom: 20 }}>

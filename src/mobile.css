@@ -1,0 +1,37 @@
+/* ─────────────────────────────────────────────────────────────
+   mobile.css — mobilanpassning för Klara-designen
+
+   Appen är byggd med inline styles, så desktop-grid:en ligger i
+   style-attributet. Attributselektorer + !important låter oss
+   överstyra dem på små skärmar utan att röra varje sida.
+
+   Brytpunkt 640px = samma som useIsMobile / index.js.
+   ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  /* Sidornas ytterpadding — alla Klara-sidor använder 32px/28px 36px */
+  main > div[style*="padding: 32px 36px"],
+  main > div[style*="padding: 28px 36px"],
+  main > div[style*="padding: 28px 24px"] {
+    padding: 18px 14px !important;
+  }
+
+  /* Auto-fill-grid (garderob, paket, medicin): tillåt smalare kort */
+  main [style*="minmax(360px"],
+  main [style*="minmax(240px"] {
+    grid-template-columns: 1fr !important;
+  }
+  main [style*="minmax(180px"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Rubriker: lite mindre på mobil */
+  main h1 { font-size: 21px !important; }
+  main h2 { font-size: 15px !important; }
+
+  /* Breda element ska aldrig tvinga fram sidoscroll */
+  main img, main video, main canvas { max-width: 100% !important; }
+
+  /* Tabeller och kodblock scrollar i egen container */
+  main table { display: block !important; overflow-x: auto !important; }
+}

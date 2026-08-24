@@ -107,10 +107,7 @@ const PAGE_TITLES = {
 export default function KlaraLayout() {
   const [page, setPage] = useState('hem');
   const [guestMode, setGuestMode] = useState(false);
-  const widthMobile = useIsMobile();
-  // Samma override som index.js: ?desktop tvingar sidomeny, ?mobile tvingar drawer
-  const search = typeof window !== 'undefined' ? window.location.search : '';
-  const isMobile = search.includes('mobile') || (widthMobile && !search.includes('desktop'));
+  const isMobile = useIsMobile(); // hanterar även ?desktop / ?mobile-override
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Navigera + stäng menyn på mobil

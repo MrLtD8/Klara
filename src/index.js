@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './mobile.css';
 
 const params = window.location.search;
 const isTestMode   = params.includes('test');

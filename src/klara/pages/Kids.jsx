@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
+import { useIsMobile } from '../../useIsMobile';
 import { fileToDownscaledJpeg } from '../../imageUtil';
 
 // ─── Levels (baserat på totalt intjänade stjärnor) ────────────────────────────
@@ -112,6 +113,7 @@ function getKD(kidsData, kidId) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Kids({ members = [] }) {
+  const isMobile = useIsMobile();
   const [chores,     setChores]     = useLocalStorage('kl_chores',     DEFAULT_CHORES);
   const [rewards,    setRewards]    = useLocalStorage('kl_rewards',    DEFAULT_REWARDS);
   const [kidsData,   setKidsData]   = useLocalStorage('kl_kids',       {});
@@ -151,6 +153,8 @@ export default function Kids({ members = [] }) {
   const newRewardFileRef = useRef(null);
   // Reward edit (redigera befintlig belöning utan att ta bort den)
   const [editReward,     setEditReward]     = useState(null); // reward-id eller null
+  const [editStars,      setEditStars]      = useState(null); // kid-id eller null
+  const [editStarsVal,   setEditStarsVal]   = useState(0);
   const [edTitle,        setEdTitle]         = useState('');
   const [edCost,         setEdCost]          = useState(30);
   const [edIcon,         setEdIcon]          = useState('🎁');
@@ -205,6 +209,25 @@ export default function Kids({ members = [] }) {
       ...prev,
       [kidId]: { ...kd(kidId), choreState: {} },
     }));
+  }
+
+  // ── Justera stjärnsaldot manuellt (t.ex. vid felklick) ──
+  // Skillnaden läggs även på totalStars så nivåer/utmärkelser följer med.
+  function saveStars(kidId) {
+    const next = Math.max(0, Math.round(Number(editStarsVal) || 0));
+    setKidsData(prev => {
+      const d = kd(kidId);
+      const delta = next - (d.stars || 0);
+      return {
+        ...prev,
+        [kidId]: {
+          ...d,
+          stars: next,
+          totalStars: Math.max(next, (d.totalStars || 0) + delta),
+        },
+      };
+    });
+    setEditStars(null);
   }
 
   function addChore() {
@@ -372,7 +395,7 @@ export default function Kids({ members = [] }) {
                 const doneToday = chores.filter(c => isChoreChecked(c, data.choreState)).length;
 
                 return (
-                  <div key={kid.id} style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 20 }}>
+                  <div key={kid.id} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 280px', gap: 20 }}>
 
                     {/* Left: chore list */}
                     <div>
@@ -384,11 +407,32 @@ export default function Kids({ members = [] }) {
                             <div style={{ fontSize: 12, color: T.textMuted }}>{doneToday} av {chores.length} gjorda</div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: lv.bg, borderRadius: T.radiusSm, padding: '6px 14px' }}>
-                              <span style={{ fontSize: 18 }}>⭐</span>
-                              <span style={{ fontSize: 20, fontWeight: 800, color: lv.color }}>{data.stars || 0}</span>
-                              <span style={{ fontSize: 11, color: T.textMuted }}>kvar</span>
-                            </div>
+                            {editStars === kid.id ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: lv.bg, borderRadius: T.radiusSm, padding: '6px 10px' }}>
+                                <span style={{ fontSize: 18 }}>⭐</span>
+                                <input
+                                  autoFocus type="number" min="0" value={editStarsVal}
+                                  onChange={e => setEditStarsVal(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') saveStars(kid.id); if (e.key === 'Escape') setEditStars(null); }}
+                                  style={{ width: 60, border: `1px solid ${T.border}`, borderRadius: 6, background: T.card, fontSize: 16, fontWeight: 800, color: lv.color, textAlign: 'center', outline: 'none', padding: '2px 4px' }}
+                                />
+                                <button onClick={() => saveStars(kid.id)} title="Spara"
+                                  style={{ background: T.purple, color: '#fff', border: 'none', borderRadius: 6, padding: '4px 9px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✓</button>
+                                <button onClick={() => setEditStars(null)} title="Avbryt"
+                                  style={{ background: 'none', border: 'none', color: T.textMuted, fontSize: 14, cursor: 'pointer', padding: '0 2px' }}>✕</button>
+                              </div>
+                            ) : (
+                              <div
+                                onClick={() => { setEditStarsVal(data.stars || 0); setEditStars(kid.id); }}
+                                title="Klicka för att justera stjärnsaldot"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, background: lv.bg, borderRadius: T.radiusSm, padding: '6px 14px', cursor: 'pointer' }}
+                              >
+                                <span style={{ fontSize: 18 }}>⭐</span>
+                                <span style={{ fontSize: 20, fontWeight: 800, color: lv.color }}>{data.stars || 0}</span>
+                                <span style={{ fontSize: 11, color: T.textMuted }}>kvar</span>
+                                <span style={{ fontSize: 11, color: T.textMuted, opacity: 0.6 }}>✏️</span>
+                              </div>
+                            )}
                             <button
                               onClick={() => resetChores(kid.id)}
                               title="Återställ alla bockar (stjärnor behålls)"

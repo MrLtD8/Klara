@@ -1,5 +1,18 @@
 # Ändringslogg — Familjeapp
 
+## 1.18.0 (2026-08-24)
+
+### Justera stjärnsaldot (Kids & Sysslor)
+- **Klicka på stjärnsaldot** för att rätta det manuellt — t.ex. om någon råkat bocka av fel syssla. Skriv rätt antal och spara (Enter sparar, Esc avbryter).
+- Ändringen speglas i totalt intjänade stjärnor så nivåer och utmärkelser förblir korrekta.
+
+### Mobilanpassade sidor
+- Alla Klara-sidor staplar nu i **en kolumn på telefon** istället för att klämma ihop desktop-layouten: Hem-widgetarna, uppgiftstavlans tre kolumner, Kids sidopanel och Assistentens tvåspaltsvy.
+- Statistikkorten på Hem visas i 2 kolumner istället för 4, och sidornas marginaler krymper så innehållet får plats.
+- `?desktop` / `?mobile` i URL:en tvingar respektive läge på alla sidor (praktiskt för test).
+
+---
+
 ## 1.17.0 (2026-08-07)
 
 ### Kids: sysslor kan redigeras och få bilder

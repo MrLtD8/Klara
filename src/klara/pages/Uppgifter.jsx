@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
+import { useIsMobile } from '../../useIsMobile';
 
 const LANES = [
   { id: 'ready',    label: 'Att göra', color: T.purple, bg: T.purpleLight },
@@ -110,6 +111,7 @@ const DEFAULT_PACKAGES = [
 ];
 
 export default function Uppgifter({ members: membersProp, tasks: tasksProp, setTasks: setTasksProp }) {
+  const isMobile = useIsMobile();
   const [tasksLocal, setTasksLocal] = useLocalStorage('kl_tasks', defaultTasksLocal);
   const [membersLocal] = useLocalStorage('kl_members', defaultMembersLocal);
 
@@ -370,7 +372,7 @@ export default function Uppgifter({ members: membersProp, tasks: tasksProp, setT
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? 14 : 20 }}>
         {LANES.map(lane => {
           const laneTasks = filteredTasks.filter(t => t.lane === lane.id);
           const isDragTarget = dragOverLane === lane.id;

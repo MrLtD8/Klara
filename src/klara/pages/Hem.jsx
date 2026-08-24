@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { T } from '../theme';
 import { useLocalStorage } from '../../useLocalStorage';
+import { useIsMobile } from '../../useIsMobile';
 import useIcsCalendars from '../../useIcsCalendars';
 import { DEFAULT_GCAL, activeCalendars } from '../../gcal';
 import {
@@ -520,6 +521,7 @@ function Widget({ id, title, onGo, goLabel = 'Visa alla →', children, editMode
 
 // ─── Hem ──────────────────────────────────────────────────────────────────────
 export default function Hem({ members, tasks, setTasks, events, onNavigate, guestMode = false, familyName = '' }) {
+  const isMobile = useIsMobile();
   const [carItems]   = useLocalStorage('kl_car',    []);
   const [houseItems] = useLocalStorage('kl_house',  []);
   const [medicins, setMedicins]   = useLocalStorage('kl_medicin',[]);
@@ -660,7 +662,7 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
 
   function renderWidgets() {
     return visibleWidgets.map(w => {
-      const colSpan = Math.min(w.cols, 4);
+      const colSpan = isMobile ? 1 : Math.min(w.cols, 4);
 
       switch (w.id) {
 
@@ -1066,7 +1068,7 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
       <FlowStrip />
 
       {/* ── Stat cards ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 22, marginTop: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? 10 : 14, marginBottom: 22, marginTop: 14 }}>
         <StatCard
           icon={Calendar} iconColor={T.purple} iconBg={T.purpleLight}
           value={eventsThisWeek.length} label="Händelser denna vecka"
@@ -1098,7 +1100,7 @@ export default function Hem({ members, tasks, setTasks, events, onNavigate, gues
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: isMobile ? 14 : 20, marginBottom: 20 }}>
         {renderWidgets()}
       </div>
 
